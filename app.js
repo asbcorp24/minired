@@ -238,7 +238,7 @@ function updateTransitionFX(p,e){
  transitionFX.geometry.attributes.position.needsUpdate=true;
 }
 function hideImageCube(){imageCubeGroup.visible=false;cubeTransition=null;imageAdvancePreparing=false;imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);}
-function showSTLItem(file){hideImageCube();currentContentType='stl';loadSTL(file);}
+function showSTLItem(file){currentContentType='stl';loadSTL(file,{silent:true,fromCube:imageCubeGroup.visible});}
 function cubeNearPosition(){
  const dir=new THREE.Vector3().subVectors(camera.position,controls.target).normalize();
  return dir.multiplyScalar(58);
@@ -300,12 +300,16 @@ function createFittedImageTexture(file,mode='contain',size=2048){
   img.src=url;
  });
 }
-async function showImageItem(file){
- currentContentType='image';disposeTransitionFX();
- if(currentMesh||oldMesh){disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';}
- $('loading').classList.add('active');$('info').textContent='⏳ '+file.name;
+async function showImageItem(file,{silent=true}={}){
+ const hadSTL=!!(currentMesh||oldMesh);
+ if(!silent){$('loading').classList.add('active');$('info').textContent='⏳ '+file.name;}
  try{
   const texture=await createFittedImageTexture(file,state.imageFitMode),sideFaces=[4,0,5,1];
+  currentContentType='image';disposeTransitionFX();
+  if(hadSTL){
+   disposeModel(currentMesh);disposeModel(oldMesh);
+   currentMesh=oldMesh=null;transitionState='idle';
+  }
   if(!imageCubeGroup.visible){
    cubeStep=0;cubeFaceIndex=sideFaces[0];setFaceTexture(cubeFaceIndex,texture);
    imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
@@ -321,34 +325,43 @@ async function showImageItem(file){
     startRot:imageCube.rotation.y,targetRot:imageCube.rotation.y+quarterTurn,targetStep:nextStep,targetFace:nextFace};
   }
   showLabel(file.name);$('info').textContent='🖼 '+file.name;
- }catch(err){console.error(err);$('info').textContent='❌ Ошибка изображения';}
- $('loading').classList.remove('active');
+ }catch(err){
+  console.error(err);$('info').textContent='❌ Ошибка изображения';
+ }
+ if(!silent)$('loading').classList.remove('active');
 }
 function showPlaylistItem(item){
  if(!item)return;
- if(item.type==='image')showImageItem(item.file);
+ if(item.type==='image')showImageItem(item.file,{silent:true});
  else showSTLItem(item.file);
 }
-function loadSTL(file){
+function loadSTL(file,{silent=false,fromCube=false}={}){
  if(!file)return;
  if(transitionState!=='idle'){pending=file;return;}
- $('loading').classList.add('active');$('info').textContent='⏳ '+file.name;
+ if(!silent){$('loading').classList.add('active');$('info').textContent='⏳ '+file.name;}
  const r=new FileReader();
  r.onload=e=>{
   try{
-   const next=meshFromBuffer(e.target.result);scene.add(next);
+   const next=meshFromBuffer(e.target.result);
+   if(fromCube&&imageCubeGroup.visible)hideImageCube();
+   scene.add(next);
    if(currentMesh){oldMesh=currentMesh;currentMesh=next;transitionState='cross';beginTransitionFX(state.transitionMode);}
    else{currentMesh=next;transitionState='in';}
+   currentContentType='stl';
    transitionTime=0;showLabel(file.name);
    $('info').textContent='✅ '+file.name+' | '+Math.round(next.geometry.attributes.position.count/3).toLocaleString()+' треуг.';
    syncMaterials();
-  }catch(err){console.error(err);$('info').textContent='❌ '+err.message;transitionState='idle';}
-  $('loading').classList.remove('active');
+  }catch(err){
+   console.error(err);$('info').textContent='❌ '+err.message;transitionState='idle';
+  }
+  if(!silent)$('loading').classList.remove('active');
  };
- r.onerror=()=>{$('loading').classList.remove('active');transitionState='idle';$('info').textContent='❌ Ошибка чтения STL';};
+ r.onerror=()=>{
+  if(!silent)$('loading').classList.remove('active');
+  transitionState='idle';$('info').textContent='❌ Ошибка чтения STL';
+ };
  r.readAsArrayBuffer(file);
 }
-
 const playlist=[];let playlistIndex=0,playlistPlaying=true,playlistTimer=0,playlistInterval=30;
 function renderPlaylist(){
  $('plCount').textContent=playlist.length;$('plList').innerHTML='';$('playlist').style.display=playlist.length?'block':'none';
@@ -458,11 +471,11 @@ function animate(){
    disposeTransitionFX();
    if(currentMesh){currentMesh.scale.set(1,1,1);currentMesh.material.uniforms.uAlpha.value=1;}
    disposeModel(oldMesh);oldMesh=null;transitionState='idle';syncMaterials();
-   if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f),0);}
+   if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f,{silent:true}),0);}
   }
  }else if(transitionState==='in'){
   transitionTime+=dt;const p=Math.min(transitionTime/Math.max(state.transition/2,.05),1),e=ease(p);if(currentMesh)currentMesh.material.uniforms.uAlpha.value=e;
-  if(p>=1){transitionState='idle';if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f),0);}}
+  if(p>=1){transitionState='idle';if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f,{silent:true}),0);}}
  }
  if(cubeTransition){
   cubeTransition.time+=dt;
