@@ -1257,6 +1257,19 @@ $('audioReactToggle').onchange=e=>{state.audioReact=e.target.checked;saveSoon();
 $('recordBtn').onclick=()=>recorder&&recorder.state==='recording'?stopRecording():startRecording();
 
 $('settingsToggle').onclick=()=>$('controls').classList.toggle('open');
+document.querySelectorAll('#controls details.acc').forEach(acc=>{
+ acc.addEventListener('toggle',()=>{
+  if(!acc.open)return;
+  document.querySelectorAll('#controls details.acc').forEach(other=>{if(other!==acc)other.open=false;});
+  try{localStorage.setItem('minired-open-accordion',acc.querySelector('summary')?.textContent||'');}catch(e){}
+ });
+});
+try{
+ const saved=localStorage.getItem('minired-open-accordion');
+ if(saved){
+  document.querySelectorAll('#controls details.acc').forEach(acc=>acc.open=(acc.querySelector('summary')?.textContent||'')===saved);
+ }
+}catch(e){}
 const drag=$('drag');window.addEventListener('dragover',e=>{e.preventDefault();drag.classList.add('active');});
 window.addEventListener('dragleave',e=>{if(e.relatedTarget===null)drag.classList.remove('active');});
 window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('active');const f=[...e.dataTransfer.files],media=f.filter(x=>x.name.toLowerCase().endsWith('.stl')||x.type.startsWith('image/')||/\.(jpg|jpeg|png|webp|gif)$/i.test(x.name)),a=f.find(x=>x.type.startsWith('audio/'));if(media.length)addFiles(media);if(a)loadAudio(a);});
