@@ -437,12 +437,13 @@ function updateTechnicalOverlay(mesh=currentMesh){
  const bb=mesh.geometry.boundingBox.clone();
  const sc=mesh.scale.clone();
  const min=bb.min.clone().multiply(sc),max=bb.max.clone().multiply(sc),size=new THREE.Vector3().subVectors(max,min);
+ const original=mesh.geometry.userData?.originalSize||{x:size.x,y:size.y,z:size.z};
  const offset=Math.max(size.x,size.y,size.z)*.12+6;
  if($('technicalDimensions')?.checked){
   const mul=unitScale(),ul=unitLabel();
-  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(max.x,min.y,min.z),'X',(size.x*mul).toFixed(1)+' '+ul,new THREE.Vector3(0,-offset,0));
-  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(min.x,max.y,min.z),'Y',(size.y*mul).toFixed(1)+' '+ul,new THREE.Vector3(-offset,0,0));
-  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(min.x,min.y,max.z),'Z',(size.z*mul).toFixed(1)+' '+ul,new THREE.Vector3(-offset*.65,-offset*.65,0));
+  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(max.x,min.y,min.z),'X',(original.x*mul).toFixed(1)+' '+ul,new THREE.Vector3(0,-offset,0));
+  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(min.x,max.y,min.z),'Y',(original.y*mul).toFixed(1)+' '+ul,new THREE.Vector3(-offset,0,0));
+  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(min.x,min.y,max.z),'Z',(original.z*mul).toFixed(1)+' '+ul,new THREE.Vector3(-offset*.65,-offset*.65,0));
  }
  if($('technicalAxes')?.checked){
   technicalAxesHelper=new THREE.AxesHelper(Math.max(size.x,size.y,size.z)*.7);technicalAxesHelper.position.set(min.x,min.y,min.z);technicalGroup.add(technicalAxesHelper);
@@ -486,7 +487,9 @@ const loader=new STLLoader();
 function geometryFromBuffer(buf){
  const g=loader.parse(buf);g.computeBoundingBox();
  const box=g.boundingBox,c=new THREE.Vector3(),s=new THREE.Vector3();box.getCenter(c);box.getSize(s);
- g.translate(-c.x,-c.y,-c.z);const max=Math.max(s.x,s.y,s.z)||1;g.scale(100/max,100/max,100/max);g.computeVertexNormals();return g;
+ g.userData.originalSize={x:s.x,y:s.y,z:s.z};
+ g.userData.originalCenter={x:c.x,y:c.y,z:c.z};
+ g.translate(-c.x,-c.y,-c.z);const max=Math.max(s.x,s.y,s.z)||1;g.userData.normalizedScale=100/max;g.scale(100/max,100/max,100/max);g.computeVertexNormals();return g;
 }
 function meshFromBuffer(buf){const mesh=new THREE.Mesh(geometryFromBuffer(buf),makeMaterial());addWire(mesh);mesh.scale.setScalar(state.objectScale);return mesh;}
 function applyObjectScale(){
