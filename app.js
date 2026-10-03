@@ -243,7 +243,12 @@ function cubeNearPosition(){
  const dir=new THREE.Vector3().subVectors(camera.position,controls.target).normalize();
  return dir.multiplyScalar(58);
 }
+function faceCubeGroupToCamera(){
+ imageCubeGroup.rotation.set(0,0,0);
+ imageCubeGroup.lookAt(camera.position);
+}
 function startCubeApproach(){
+ faceCubeGroupToCamera();
  cubeTransition={phase:'approach',time:0,duration:Math.max(.35,Math.min(1.2,playlistInterval*.10)),
   from:imageCubeGroup.position.clone(),to:cubeNearPosition()};
 }
@@ -260,14 +265,16 @@ async function prepareNextImageTurn(nextIndex){
  try{
   const texture=await createFittedImageTexture(item.file,state.imageFitMode);
   let dir=Math.random()<.5?-1:1;
-  if(dir===lastCubeTurn)dir*=-1;
+  // Avoid long same-direction streaks, but keep the choice genuinely variable.
+  if(dir===lastCubeTurn&&Math.random()<.65)dir=-dir;
   lastCubeTurn=dir;
   const nextStep=(cubeStep+dir+4)%4,sideFaces=[4,0,5,1],nextFace=sideFaces[nextStep];
   setFaceTexture(nextFace,texture);
   const remaining=Math.max(.35,playlistInterval-playlistTimer);
+  const quarterTurn=-dir*Math.PI/2;
   cubeTransition={phase:'exitTurn',time:0,duration:remaining,
    from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
-   startRot:imageCube.rotation.y,targetRot:-nextStep*Math.PI/2,
+   startRot:imageCube.rotation.y,targetRot:imageCube.rotation.y+quarterTurn,
    targetIndex:nextIndex,targetStep:nextStep,targetFace:nextFace};
   return true;
  }catch(err){console.error(err);return false;}
@@ -304,11 +311,14 @@ async function showImageItem(file){
    imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
    imageCubeGroup.scale.setScalar(state.objectScale);imageCubeGroup.visible=true;startCubeApproach();
   }else{
-   let dir=Math.random()<.5?-1:1;if(dir===lastCubeTurn)dir*=-1;lastCubeTurn=dir;
+   let dir=Math.random()<.5?-1:1;
+   if(dir===lastCubeTurn&&Math.random()<.65)dir=-dir;
+   lastCubeTurn=dir;
    const nextStep=(cubeStep+dir+4)%4,nextFace=sideFaces[nextStep];setFaceTexture(nextFace,texture);
+   const quarterTurn=-dir*Math.PI/2;
    cubeTransition={phase:'manualTurn',time:0,duration:Math.max(.5,state.transition),
     from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
-    startRot:imageCube.rotation.y,targetRot:-nextStep*Math.PI/2,targetStep:nextStep,targetFace:nextFace};
+    startRot:imageCube.rotation.y,targetRot:imageCube.rotation.y+quarterTurn,targetStep:nextStep,targetFace:nextFace};
   }
   showLabel(file.name);$('info').textContent='🖼 '+file.name;
  }catch(err){console.error(err);$('info').textContent='❌ Ошибка изображения';}
@@ -470,7 +480,7 @@ function animate(){
    if(p>=1){
     imageCube.rotation.y=cubeTransition.targetRot;cubeStep=cubeTransition.targetStep;cubeFaceIndex=cubeTransition.targetFace;
     const automatic=cubeTransition.phase==='exitTurn',targetIndex=cubeTransition.targetIndex;
-    imageCubeGroup.position.set(0,0,0);imageCube.rotation.x=0;cubeTransition=null;
+    imageCubeGroup.position.set(0,0,0);imageCube.rotation.x=0;imageCube.rotation.z=0;cubeTransition=null;
     if(automatic){
      playlistIndex=targetIndex;playlistTimer=0;renderPlaylist();showLabel(playlist[playlistIndex].name);
      $('info').textContent='🖼 '+playlist[playlistIndex].name;
@@ -498,11 +508,11 @@ function animate(){
  if(currentMesh&&state.autoRotate&&!state.rotPaused){const a=dt*.15*state.speed;[currentMesh,oldMesh].filter(Boolean).forEach(m=>m.rotation[state.axis]+=a);}
  if(imageCubeGroup.visible){
   if(!cubeTransition){
-   imageCubeGroup.rotation.x=Math.sin(t*.65)*.006;
-   imageCubeGroup.rotation.z=Math.cos(t*.52)*.007;
+   imageCube.rotation.x=Math.sin(t*.65)*.004;
+   imageCube.rotation.z=Math.cos(t*.52)*.005;
   }else{
-   imageCubeGroup.rotation.x*=.9;
-   imageCubeGroup.rotation.z*=.9;
+   imageCube.rotation.x*=.9;
+   imageCube.rotation.z*=.9;
   }
  }
  rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
