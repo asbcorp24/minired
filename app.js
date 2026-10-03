@@ -273,7 +273,7 @@ async function prepareNextImageTurn(nextIndex){
  }catch(err){console.error(err);return false;}
  finally{imageAdvancePreparing=false;}
 }
-function createFittedImageTexture(file,mode='contain',size=1024){
+function createFittedImageTexture(file,mode='contain',size=2048){
  return new Promise((resolve,reject)=>{
   const url=URL.createObjectURL(file),img=new Image();
   img.onload=()=>{
@@ -463,7 +463,7 @@ function animate(){
   }else if(cubeTransition.phase==='exitTurn'||cubeTransition.phase==='manualTurn'){
    const retreatP=Math.min(1,p/.42),turnP=p<.28?0:Math.min(1,(p-.28)/.72);
    imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.far,ease(retreatP));
-   imageCube.rotation.y=THREE.MathUtils.lerp(cubeTransition.startRot,cubeTransition.targetRot,ease(turnP));
+   imageCube.rotation.y=THREE.MathUtils.lerp(cubeTransition.startRot,cubeTransition.targetRot,ease(Math.min(1,turnP*Math.max(.35,state.cubeSpinSpeed))));
    imageCube.rotation.x=Math.sin(Math.PI*p)*.08;
    if(p>=1){
     cubeStep=cubeTransition.targetStep;cubeFaceIndex=cubeTransition.targetFace;
@@ -494,12 +494,13 @@ function animate(){
  }else $('plTimer').textContent='—';
  if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else controls.update();
  if(currentMesh&&state.autoRotate&&!state.rotPaused){const a=dt*.15*state.speed;[currentMesh,oldMesh].filter(Boolean).forEach(m=>m.rotation[state.axis]+=a);}
- if(imageCubeGroup.visible&&!cubeTransition){
-  imageCube.rotation.y+=dt*state.cubeSpinSpeed;
-  imageCubeGroup.rotation.x=Math.sin(t*.65)*.012;
-  imageCubeGroup.rotation.z=Math.cos(t*.52)*.014;
- }else if(imageCubeGroup.visible){
-  imageCubeGroup.rotation.x*=.92;imageCubeGroup.rotation.z*=.92;
+ if(imageCubeGroup.visible){
+  // Keep the displayed image face-on to the current camera.
+  imageCubeGroup.lookAt(camera.position);
+  if(!cubeTransition){
+   const swayX=Math.sin(t*.65)*.006,swayZ=Math.cos(t*.52)*.007;
+   imageCubeGroup.rotateX(swayX);imageCubeGroup.rotateZ(swayZ);
+  }
  }
  rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
  const mult=1+(state.audioReact&&state.envReact?bass*3:0),de=dt*state.envSpeed;
@@ -510,7 +511,11 @@ function animate(){
  if(imageCubeGroup.visible){
   const beat=state.audioReact?bass:0;
   cubeEdges.material.opacity=Math.min(1,.58+beat*.42);
-  cubeEdges.material.color.setRGB(.05+beat*.65,1+beat*.55,1+beat*.85);
+  cubeEdges.material.color.setRGB(.05+beat*.65,1,1);
+  // Photos should remain tack-sharp even when the cube comes close.
+  bokehPass.enabled=false;
+ }else{
+  bokehPass.enabled=$('dofToggle').checked;
  }
  composer.render();
 }
@@ -544,7 +549,7 @@ $('orientationResetBtn').onclick=()=>{if(currentMesh)currentMesh.rotation.set(0,
 
 $('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();saveSoon();};
 $('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveSoon();};
-$('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked;saveSoon();};
+$('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked&&!imageCubeGroup.visible;saveSoon();};
 $('gridToggle').onchange=e=>{grid.visible=e.target.checked;saveSoon();};$('showFloor').onchange=e=>{floor.visible=e.target.checked;saveSoon();};
 $('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveSoon();};const setTransitionMode=e=>{state.transitionMode=e.target.value;saveSoon();};$('transitionMode').onchange=setTransitionMode;$('transitionMode').oninput=setTransitionMode;$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
 
