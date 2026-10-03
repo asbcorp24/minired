@@ -181,7 +181,23 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div class="mini" id="zoomInBtn">➕ Приблизить</div>
 </div>
 
-</div></details><details class="acc"><summary>Stereo VR запись</summary><div class="acc-body">
+</div></details><details class="acc"><summary>Stereo VR запись</summary><div class="acc-body"><div>Обычная запись</div>
+<select id="recordResolution">
+<option value="1280x720">1280×720</option>
+<option value="1920x1080" selected>1920×1080</option>
+<option value="2560x1440">2560×1440</option>
+<option value="3840x2160">3840×2160</option>
+</select>
+<div>FPS обычной записи</div>
+<select id="recordFps">
+<option value="30" selected>30 fps</option>
+<option value="60">60 fps</option>
+</select>
+<div>Битрейт обычной записи <span id="recordBitrateValue" class="val">12</span> Мбит/с</div>
+<input id="recordBitrate" type="range" min="4" max="50" step="1" value="12">
+<label><input id="recordPerformanceMode" type="checkbox" checked>Оптимизировать обычную запись</label>
+<div style="height:8px"></div>
+
 <label><input id="stereoRecord" type="checkbox">Записывать Stereo SBS</label>
 <div style="font-size:11px;color:#9ca3af;margin:4px 0">Левый и правый глаз записываются рядом в одном видео. Шлем не требуется.</div>
 <div>Разнос глаз <span id="stereoEyeSepValue" class="val">6.4</span></div>
