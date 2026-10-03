@@ -132,7 +132,7 @@ function faceQuaternionForStep(step){
  return q;
 }
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,cubeTurnDuration:2.2,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false};
 
 const gradePresets={
  none:{contrast:1,saturation:1,temperature:0,tint:0,exposure:1.05},
@@ -607,9 +607,11 @@ async function prepareNextImageTurn(nextIndex){
   lastCubeTurn=dir;
   const nextStep=(cubeStep+dir+4)%4,sideFaces=[4,0,5,1],nextFace=sideFaces[nextStep];
   setFaceTexture(nextFace,texture);
-  const remaining=Math.max(.35,playlistInterval-playlistTimer);
+  const itemDuration=playlist[playlistIndex]?.duration||playlistInterval;
+  const available=Math.max(.8,itemDuration-playlistTimer);
+  const turnDuration=Math.min(Math.max(.8,state.cubeTurnDuration||2.2),Math.max(.8,available));
   const startQ=imageCube.quaternion.clone(),targetQ=faceQuaternionForStep(nextStep);
-  cubeTransition={phase:'exitTurn',time:0,duration:remaining,
+  cubeTransition={phase:'exitTurn',time:0,duration:turnDuration,
    from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
    startQ,targetQ,targetIndex:nextIndex,targetStep:nextStep,targetFace:nextFace};
   return true;
@@ -948,7 +950,7 @@ function updateAudio(){
 }
 
 const stereoCamera=new THREE.StereoCamera();
-let stereoRenderer=null,stereoRecording=false,recordStream=null;
+let stereoRenderer=null,stereoRecording=false,recordStream=null,stereoRenderCfg=null,stereoNextFrameAt=0,recordPreviewFrame=0;
 function stereoSettings(){
  const res=($('stereoResolution')?.value||'3840x1080').split('x').map(Number);
  return {w:res[0]||3840,h:res[1]||1080,fps:+($('stereoFps')?.value||60),bitrate:+($('stereoBitrate')?.value||24)*1000000,eyeSep:+($('stereoEyeSep')?.value||6.4),focus:+($('stereoFocus')?.value||160),swap:$('stereoSwapEyes')?.checked||false};
@@ -961,10 +963,20 @@ function ensureStereoRenderer(){
  stereoRenderer.domElement.style.position='fixed';stereoRenderer.domElement.style.left='-10000px';stereoRenderer.domElement.style.top='0';stereoRenderer.domElement.style.width='1px';stereoRenderer.domElement.style.height='1px';stereoRenderer.domElement.style.opacity='0';stereoRenderer.domElement.style.pointerEvents='none';
  document.body.appendChild(stereoRenderer.domElement);return stereoRenderer;
 }
-function renderStereoFrame(){
- if(!stereoRecording||!stereoRenderer)return;
- const cfg=stereoSettings(),half=Math.floor(cfg.w/2);
- stereoRenderer.setSize(cfg.w,cfg.h,false);stereoRenderer.setScissorTest(true);stereoRenderer.autoClear=false;stereoRenderer.clear();
+function configureStereoRenderer(cfg){
+ const r=ensureStereoRenderer();
+ if(!stereoRenderCfg||stereoRenderCfg.w!==cfg.w||stereoRenderCfg.h!==cfg.h){
+  r.setSize(cfg.w,cfg.h,false);
+ }
+ stereoRenderCfg={...cfg};
+}
+function renderStereoFrame(now=performance.now()){
+ if(!stereoRecording||!stereoRenderer||!stereoRenderCfg)return;
+ const cfg=stereoRenderCfg,frameMs=1000/Math.max(1,cfg.fps);
+ if(now<stereoNextFrameAt)return;
+ stereoNextFrameAt=now+frameMs;
+ const half=Math.floor(cfg.w/2);
+ stereoRenderer.setScissorTest(true);stereoRenderer.autoClear=false;stereoRenderer.clear();
  const prevAspect=camera.aspect,prevFocus=camera.focus;
  camera.aspect=half/cfg.h;camera.focus=cfg.focus;camera.updateProjectionMatrix();
  stereoCamera.eyeSep=cfg.eyeSep;stereoCamera.update(camera);
@@ -979,7 +991,7 @@ function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.
 function startRecording(){
  const useStereo=$('stereoRecord')?.checked===true,cfg=stereoSettings();
  const sourceCanvas=useStereo?ensureStereoRenderer().domElement:renderer.domElement;
- stereoRecording=useStereo;if(useStereo)renderStereoFrame();
+ stereoRecording=useStereo;if(useStereo){configureStereoRenderer(cfg);stereoNextFrameAt=0;renderStereoFrame(performance.now());}
  const stream=sourceCanvas.captureStream(useStereo?cfg.fps:60);recordStream=stream;
  if(analyser&&audioPlaying&&audioContext){try{if(recordDest)analyser.disconnect(recordDest);}catch(e){}recordDest=audioContext.createMediaStreamDestination();analyser.connect(recordDest);const t=recordDest.stream.getAudioTracks()[0];if(t)stream.addTrack(t);}
  const list=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
@@ -991,7 +1003,7 @@ function startRecording(){
   a.href=u;a.download=(useStereo?'minired-stereo-sbs-':'stl-clip-')+new Date().toISOString().replace(/[:.]/g,'-')+'.webm';a.click();
   setTimeout(()=>URL.revokeObjectURL(u),1000);
   if(recordDest&&analyser)try{analyser.disconnect(recordDest);}catch(e){}recordDest=null;
-  stream.getTracks().forEach(t=>t.stop());recordStream=null;stereoRecording=false;
+  stream.getTracks().forEach(t=>t.stop());recordStream=null;stereoRecording=false;stereoNextFrameAt=0;
  };
  recorder.start(100);recStart=Date.now();$('recordBtn').classList.add('recording');$('recordBtn').textContent=useStereo?'⏹ Остановить Stereo запись':'⏹ Остановить запись';$('rec').classList.add('active');
  recTimer=setInterval(()=>{$('recTime').textContent=fmt((Date.now()-recStart)/1000);},200);
@@ -1082,11 +1094,9 @@ function animate(){
    else if(style==='particles')setCubeVisualAlpha(.35+.65*Math.abs(Math.cos(Math.PI*p)));
    else if(style==='holo'){setCubeVisualAlpha(.55+.45*Math.abs(Math.cos(Math.PI*p*4)));cubeEdges.material.opacity=Math.min(1,.75+Math.sin(p*Math.PI*10)*.2);}
 
-   const retreatP=Math.min(1,p/.42),turnP=p<.28?0:Math.min(1,(p-.28)/.72);
+   const retreatP=Math.min(1,p/.55),turnP=THREE.MathUtils.smoothstep(p,.08,.96);
    imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.far,ease(retreatP));
-   const speed=Math.max(.05,state.cubeSpinSpeed);
-   const shapedTurn=Math.pow(turnP,THREE.MathUtils.clamp(1.35/speed,.45,3.5));
-   imageCube.quaternion.copy(cubeTransition.startQ).slerp(cubeTransition.targetQ,ease(shapedTurn));
+   imageCube.quaternion.copy(cubeTransition.startQ).slerp(cubeTransition.targetQ,turnP);
    if(p>=1){
     imageCube.quaternion.copy(cubeTransition.targetQ);setCubeVisualAlpha(1);cubeStep=cubeTransition.targetStep;cubeFaceIndex=cubeTransition.targetFace;
     const automatic=cubeTransition.phase==='exitTurn',targetIndex=cubeTransition.targetIndex;
@@ -1211,7 +1221,7 @@ function animate(){
 
   bokehPass.enabled=$('dofToggle').checked;
  }
- composer.render();renderStereoFrame();
+ if(stereoRecording&&$('stereoPerformanceMode')?.checked){recordPreviewFrame++;if(recordPreviewFrame%2===0)renderer.render(scene,camera);}else composer.render();renderStereoFrame(performance.now());
 }
 renderer.setAnimationLoop(animate);
 
@@ -1232,6 +1242,7 @@ $('autoRotateToggle').onchange=e=>{state.autoRotate=e.target.checked;saveSoon();
 document.querySelectorAll('.axis').forEach(b=>b.onclick=()=>{document.querySelectorAll('.axis').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.axis=b.dataset.axis;saveSoon();});
 $('speedSlider').oninput=e=>{state.speed=+e.target.value;setText('speedValue',Math.abs(state.speed).toFixed(1));$('directionLabel').textContent=state.speed<0?'↺':state.speed>0?'↻':'⏸';saveSoon();};
 $('cubeSpinSpeed').oninput=e=>{state.cubeSpinSpeed=+e.target.value;setText('cubeSpinSpeedValue',state.cubeSpinSpeed.toFixed(2));saveSoon();};
+$('cubeTurnDuration').oninput=e=>{state.cubeTurnDuration=+e.target.value;setText('cubeTurnDurationValue',state.cubeTurnDuration.toFixed(1));saveSoon();};
 $('imageFitMode').onchange=e=>{state.imageFitMode=e.target.value;preloadCache.clear();saveSoon();};
 $('cubeTransitionStyle').onchange=e=>{state.cubeTransitionStyle=e.target.value;saveSoon();};
 $('cubeHoldPercent').oninput=e=>{state.cubeHoldPercent=+e.target.value;setText('cubeHoldValue',state.cubeHoldPercent);saveSoon();};
@@ -1288,7 +1299,7 @@ $('directorPreviewBtn').onclick=()=>{if(!playlist.length)return;playlistIndex=0;
 $('stereoEyeSep').oninput=e=>{setText('stereoEyeSepValue',(+e.target.value).toFixed(1));saveSoon();};
 $('stereoFocus').oninput=e=>{setText('stereoFocusValue',Math.round(+e.target.value));saveSoon();};
 $('stereoBitrate').oninput=e=>{setText('stereoBitrateValue',Math.round(+e.target.value));saveSoon();};
-$('stereoRecord').onchange=saveSoon;$('stereoResolution').onchange=saveSoon;$('stereoFps').onchange=saveSoon;$('stereoSwapEyes').onchange=saveSoon;
+$('stereoRecord').onchange=saveSoon;$('stereoResolution').onchange=saveSoon;$('stereoFps').onchange=saveSoon;$('stereoSwapEyes').onchange=saveSoon;$('stereoPerformanceMode').onchange=saveSoon;
 
 $('applyCameraPreset').onclick=()=>applyCameraView($('cameraPreset').value);
 $('autoCameraEach').onclick=()=>{state.autoCameraEach=!state.autoCameraEach;$('autoCameraEach').classList.toggle('active',state.autoCameraEach);$('autoCameraEach').textContent=state.autoCameraEach?'✓ Auto для каждой STL':'Auto для каждой STL';saveSoon();};
@@ -1391,14 +1402,14 @@ $('resetCinemaBtn').onclick=()=>{
  glassMaterial.opacity=state.cubeGlassOpacity;saveSoon();
 };
 function saveSettingsSnapshot(){
- const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits','stereoRecord','stereoEyeSep','stereoFocus','stereoResolution','stereoFps','stereoBitrate','stereoSwapEyes','directorStyle','directorEnergy','directorUseMusic','directorInterleave','directorAutoCamera','directorPostFx','directorDuration'];
+ const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits','stereoRecord','stereoEyeSep','stereoFocus','stereoResolution','stereoFps','stereoBitrate','stereoSwapEyes','stereoPerformanceMode','cubeTurnDuration','directorStyle','directorEnergy','directorUseMusic','directorInterleave','directorAutoCamera','directorPostFx','directorDuration'];
  const o={};ids.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
 }
 function applySettingsSnapshot(o){Object.entries(o||{}).forEach(([id,v])=>{const e=$(id);if(!e)return;if(e.type==='checkbox'){e.checked=!!v;e.dispatchEvent(new Event('change'));}else{e.value=v;e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});}
 const KEY='stl-cinematic-settings-v2';let saveTimer;
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSettings,100);}
 function saveSettings(){
- const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval','cubeSpinSpeed','objectScale','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset'];
+ const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval','cubeSpinSpeed','cubeTurnDuration','objectScale','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset'];
  const d={axis:state.axis,customScenePreset,autoCameraEach:state.autoCameraEach};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
 }
 function restoreSettings(){
@@ -1410,6 +1421,7 @@ restoreSettings();
 if($('scenePreset')&&$('scenePreset').value!=='custom'&&scenePresets[$('scenePreset').value])applyScenePresetByName($('scenePreset').value);
 else if($('gradePreset'))applyGradePreset($('gradePreset').value||'none');
 state.cubeSpinSpeed=+$('cubeSpinSpeed').value||.3;
+state.cubeTurnDuration=+$('cubeTurnDuration').value||2.2;setText('cubeTurnDurationValue',state.cubeTurnDuration.toFixed(1));
 setText('cubeSpinSpeedValue',state.cubeSpinSpeed.toFixed(2));
 setObjectScale(+$('objectScale').value||1);
 
