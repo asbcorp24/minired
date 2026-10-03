@@ -31,7 +31,6 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <label class="btn" for="fileInput">📂 Добавить STL / картинки</label><input id="fileInput" type="file" accept=".stl,image/jpeg,image/png,image/webp,image/gif" multiple>
 <div class="btn" id="playBtn">▶️ Пролёт камеры</div><div class="btn" id="recordBtn">⏺ Запись клипа</div><div class="btn" id="resetBtn">🔄 Сброс камеры</div>
 <div class="btn" id="previewBtn">🎬 Preview</div>
-<div class="btn" id="vrBtn">🥽 VR</div>
 <div class="btn" id="addTextBtn">✚ Текст</div>
 <div class="row"><div class="mini" id="saveProjectBtn">💾 Проект</div><label class="mini" for="projectInput">📁 Открыть</label></div>
 <input id="projectInput" type="file" accept=".json,application/json">
@@ -151,18 +150,27 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div class="mini" id="zoomInBtn">➕ Приблизить</div>
 </div>
 
-<div class="section">VR / WebXR</div>
-<div id="vrStatus" style="font-size:11px;color:#9ca3af;margin:4px 0">Проверка WebXR...</div>
-<label><input id="vrLocomotion" type="checkbox" checked>Перемещение стиком</label>
-<label><input id="vrControllerRays" type="checkbox" checked>Лучи контроллеров</label>
-<label><input id="vrTriggerNext" type="checkbox" checked>Триггер → следующий элемент</label>
-<label><input id="vrScaleControl" type="checkbox" checked>Правый стик → масштаб</label>
-<div>Скорость VR <span id="vrMoveSpeedValue" class="val">1.5</span></div>
-<input id="vrMoveSpeed" type="range" min=".2" max="5" step=".1" value="1.5">
-<div class="row" style="margin-top:6px">
-<div class="mini" id="vrResetBtn">⌂ Центрировать VR</div>
-<div class="mini" id="vrExitBtn">Выйти из VR</div>
-</div>
+<div class="section">Stereo VR запись</div>
+<label><input id="stereoRecord" type="checkbox">Записывать Stereo SBS</label>
+<div style="font-size:11px;color:#9ca3af;margin:4px 0">Левый и правый глаз записываются рядом в одном видео. Шлем не требуется.</div>
+<div>Разнос глаз <span id="stereoEyeSepValue" class="val">6.4</span></div>
+<input id="stereoEyeSep" type="range" min=".5" max="20" step=".1" value="6.4">
+<div>Фокус / convergence <span id="stereoFocusValue" class="val">160</span></div>
+<input id="stereoFocus" type="range" min="30" max="500" step="5" value="160">
+<div>Разрешение SBS</div>
+<select id="stereoResolution">
+<option value="2560x720">2560×720 — 1280×720 на глаз</option>
+<option value="3840x1080" selected>3840×1080 — 1920×1080 на глаз</option>
+<option value="5120x1440">5120×1440 — 2560×1440 на глаз</option>
+</select>
+<div>FPS</div>
+<select id="stereoFps">
+<option value="30">30 fps</option>
+<option value="60" selected>60 fps</option>
+</select>
+<div>Битрейт <span id="stereoBitrateValue" class="val">24</span> Мбит/с</div>
+<input id="stereoBitrate" type="range" min="8" max="60" step="1" value="24">
+<label><input id="stereoSwapEyes" type="checkbox">Поменять L/R местами</label>
 
 <div class="section">Авто-камера STL</div>
 <select id="cameraPreset">
