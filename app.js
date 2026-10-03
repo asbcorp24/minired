@@ -378,8 +378,8 @@ async function showImageItem(file,{silent=true}={}){
   if(hadSTL){
    const preparedFace=sideFaces[0];
    cubeStep=0;cubeFaceIndex=preparedFace;setFaceTexture(preparedFace,texture);
-   imageCube.rotation.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
-   imageCubeGroup.position.copy(sceneBackPosition(260));
+   imageCube.rotation.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);faceCubeGroupToCamera();
+   imageCubeGroup.position.copy(sceneBackPosition(state.cubeFarDistance));
    imageCubeGroup.scale.setScalar(state.objectScale*.82);
    setCubeVisualAlpha(0);imageCubeGroup.visible=true;
    typeTransition={
@@ -624,7 +624,7 @@ function animate(){
    setCubeVisualAlpha(ease(inP));
    if(p>=1){
     disposeModel(m);currentMesh=null;oldMesh=null;transitionState='idle';currentContentType='image';
-    imageCubeGroup.position.copy(typeTransition.cubeTo);imageCubeGroup.scale.setScalar(state.objectScale);setCubeVisualAlpha(1);
+    imageCubeGroup.position.copy(typeTransition.cubeTo);imageCubeGroup.scale.setScalar(state.objectScale);setCubeVisualAlpha(1);faceCubeGroupToCamera();
     showLabel(typeTransition.fileName);$('info').textContent='🖼 '+typeTransition.fileName;
     typeTransition=null;
    }
