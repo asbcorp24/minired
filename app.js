@@ -63,8 +63,8 @@ imageCube.add(cubeEdges);
 const imageFacePlanes=[];
 const facePlaneGeo=new THREE.PlaneGeometry(cubeSize*.92,cubeSize*.92);
 for(let i=0;i<6;i++){
- const mat=new THREE.MeshBasicMaterial({transparent:true,opacity:1,side:THREE.DoubleSide,toneMapped:false});
- const plane=new THREE.Mesh(facePlaneGeo,mat);imageCube.add(plane);imageFacePlanes.push(plane);
+ const mat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:1,side:THREE.DoubleSide,toneMapped:false});
+ const plane=new THREE.Mesh(facePlaneGeo,mat);plane.visible=false;imageCube.add(plane);imageFacePlanes.push(plane);
 }
 imageFacePlanes[0].position.set( halfCube+.25,0,0);imageFacePlanes[0].rotation.y=-Math.PI/2;
 imageFacePlanes[1].position.set(-halfCube-.25,0,0);imageFacePlanes[1].rotation.y= Math.PI/2;
@@ -248,9 +248,9 @@ function startCubeApproach(){
   from:imageCubeGroup.position.clone(),to:cubeNearPosition()};
 }
 function setFaceTexture(faceIndex,texture){
- const mat=imageFacePlanes[faceIndex].material;
+ const face=imageFacePlanes[faceIndex],mat=face.material;
  if(mat.map)mat.map.dispose();
- mat.map=texture;mat.needsUpdate=true;
+ mat.map=texture;mat.color.set(0xffffff);mat.needsUpdate=true;face.visible=true;
 }
 async function prepareNextImageTurn(nextIndex){
  if(imageAdvancePreparing||cubeTransition)return false;
@@ -364,7 +364,7 @@ function nextModel(){if(!playlist.length)return;playlistIndex=(playlistIndex+1)%
 function clearModels(){
  disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';hideLabel();
  hideImageCube();cubeStep=0;cubeFaceIndex=4;imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);
- imageFacePlanes.forEach(face=>{const m=face.material;if(m.map){m.map.dispose();m.map=null;}m.needsUpdate=true;});
+ imageFacePlanes.forEach(face=>{const m=face.material;if(m.map){m.map.dispose();m.map=null;}face.visible=false;m.needsUpdate=true;});
  currentContentType=null;
 }
 
@@ -463,10 +463,12 @@ function animate(){
   }else if(cubeTransition.phase==='exitTurn'||cubeTransition.phase==='manualTurn'){
    const retreatP=Math.min(1,p/.42),turnP=p<.28?0:Math.min(1,(p-.28)/.72);
    imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.far,ease(retreatP));
-   imageCube.rotation.y=THREE.MathUtils.lerp(cubeTransition.startRot,cubeTransition.targetRot,ease(Math.min(1,turnP*Math.max(.35,state.cubeSpinSpeed))));
+   const speed=Math.max(.05,state.cubeSpinSpeed);
+   const shapedTurn=Math.pow(turnP,THREE.MathUtils.clamp(1.35/speed,.45,3.5));
+   imageCube.rotation.y=THREE.MathUtils.lerp(cubeTransition.startRot,cubeTransition.targetRot,ease(shapedTurn));
    imageCube.rotation.x=Math.sin(Math.PI*p)*.08;
    if(p>=1){
-    cubeStep=cubeTransition.targetStep;cubeFaceIndex=cubeTransition.targetFace;
+    imageCube.rotation.y=cubeTransition.targetRot;cubeStep=cubeTransition.targetStep;cubeFaceIndex=cubeTransition.targetFace;
     const automatic=cubeTransition.phase==='exitTurn',targetIndex=cubeTransition.targetIndex;
     imageCubeGroup.position.set(0,0,0);imageCube.rotation.x=0;cubeTransition=null;
     if(automatic){
@@ -495,11 +497,12 @@ function animate(){
  if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else controls.update();
  if(currentMesh&&state.autoRotate&&!state.rotPaused){const a=dt*.15*state.speed;[currentMesh,oldMesh].filter(Boolean).forEach(m=>m.rotation[state.axis]+=a);}
  if(imageCubeGroup.visible){
-  // Keep the displayed image face-on to the current camera.
-  imageCubeGroup.lookAt(camera.position);
   if(!cubeTransition){
-   const swayX=Math.sin(t*.65)*.006,swayZ=Math.cos(t*.52)*.007;
-   imageCubeGroup.rotateX(swayX);imageCubeGroup.rotateZ(swayZ);
+   imageCubeGroup.rotation.x=Math.sin(t*.65)*.006;
+   imageCubeGroup.rotation.z=Math.cos(t*.52)*.007;
+  }else{
+   imageCubeGroup.rotation.x*=.9;
+   imageCubeGroup.rotation.z*=.9;
   }
  }
  rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
