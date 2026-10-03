@@ -6,9 +6,20 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {BokehPass} from 'three/addons/postprocessing/BokehPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import {FontLoader} from 'three/addons/loaders/FontLoader.js';
+import {TextGeometry} from 'three/addons/geometries/TextGeometry.js';
 
 const $=id=>document.getElementById(id);
 const scene=new THREE.Scene();
+const fontLoader=new FontLoader();
+const fontUrls={
+ helvetiker:'https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json',
+ optimer:'https://unpkg.com/three@0.160.0/examples/fonts/optimer_regular.typeface.json',
+ gentilis:'https://unpkg.com/three@0.160.0/examples/fonts/gentilis_regular.typeface.json'
+};
+const fontCache=new Map();
+const textObjects=[];
+let activeTextId=null,textIdSeq=1;
 scene.background=new THREE.Color(0x050510);
 scene.fog=new THREE.FogExp2(0x050510,.0035);
 
@@ -148,6 +159,78 @@ function syncMaterials(){
  });
 }
 
+async function getFont(name){
+ if(fontCache.has(name))return fontCache.get(name);
+ const font=await new Promise((resolve,reject)=>fontLoader.load(fontUrls[name]||fontUrls.helvetiker,resolve,undefined,reject));
+ fontCache.set(name,font);return font;
+}
+function activeText(){return textObjects.find(x=>x.id===activeTextId)||null;}
+function textParamsFromUI(){
+ return {
+  text:$('textValue')?.value||'Текст',
+  font:$('textFont')?.value||'helvetiker',
+  size:+($('textSize')?.value||12),
+  depth:+($('textDepth')?.value||2),
+  glow:+($('textGlow')?.value||1.2),
+  color:$('textColor')?.value||'#00ffff',
+  animation:$('textAnimation')?.value||'fade',
+  animDuration:+($('textAnimDuration')?.value||1.2),
+  x:+($('textX')?.value||0),y:+($('textY')?.value||35),z:+($('textZ')?.value||0),
+  faceCamera:$('textFaceCamera')?.checked!==false
+ };
+}
+function disposeTextObject(obj){
+ if(!obj)return;
+ scene.remove(obj.group);
+ obj.mesh?.geometry?.dispose();obj.mesh?.material?.dispose();
+ obj.glowMesh?.geometry?.dispose();obj.glowMesh?.material?.dispose();
+ const i=textObjects.indexOf(obj);if(i>=0)textObjects.splice(i,1);
+}
+function refreshTextSelect(){
+ const s=$('textObjectSelect');if(!s)return;
+ s.innerHTML='';
+ if(!textObjects.length){const o=document.createElement('option');o.value='';o.textContent='Нет текстовых объектов';s.appendChild(o);activeTextId=null;return;}
+ textObjects.forEach(o=>{const op=document.createElement('option');op.value=o.id;op.textContent=o.params.text||('Текст '+o.id);s.appendChild(op);});
+ if(!activeTextId||!textObjects.some(o=>o.id===activeTextId))activeTextId=textObjects[0].id;
+ s.value=activeTextId;
+}
+function loadTextUI(obj){
+ if(!obj)return;const p=obj.params;
+ const vals={textValue:p.text,textFont:p.font,textSize:p.size,textDepth:p.depth,textGlow:p.glow,textColor:p.color,textAnimation:p.animation,textAnimDuration:p.animDuration,textX:p.x,textY:p.y,textZ:p.z};
+ Object.entries(vals).forEach(([id,v])=>{if($(id))$(id).value=v;});
+ if($('textFaceCamera'))$('textFaceCamera').checked=!!p.faceCamera;
+ if($('textSizeValue'))$('textSizeValue').textContent=(+p.size).toFixed(1);
+ if($('textDepthValue'))$('textDepthValue').textContent=(+p.depth).toFixed(1);
+ if($('textGlowValue'))$('textGlowValue').textContent=(+p.glow).toFixed(2);
+ if($('textAnimDurationValue'))$('textAnimDurationValue').textContent=(+p.animDuration).toFixed(1);
+ ['x','y','z'].forEach(k=>{if($('text'+k.toUpperCase()+'Value'))$('text'+k.toUpperCase()+'Value').textContent=Math.round(p[k]);});
+}
+async function rebuildTextObject(obj,play=false){
+ if(!obj)return;
+ const p=obj.params,font=await getFont(p.font);
+ const geo=new TextGeometry(p.text||'Текст',{font,size:p.size,depth:p.depth,curveSegments:8,bevelEnabled:p.depth>0,bevelThickness:Math.min(.35,p.depth*.12),bevelSize:Math.min(.22,p.size*.025),bevelSegments:2});
+ geo.computeBoundingBox();const box=geo.boundingBox;
+ if(box){const cx=(box.max.x-box.min.x)/2;geo.translate(-cx,0,0);}
+ const mat=new THREE.MeshStandardMaterial({color:new THREE.Color(p.color),emissive:new THREE.Color(p.color),emissiveIntensity:.35+p.glow*.4,metalness:.18,roughness:.28,transparent:true,opacity:1});
+ const glowMat=new THREE.MeshBasicMaterial({color:new THREE.Color(p.color),transparent:true,opacity:.08+p.glow*.08,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.BackSide});
+ const mesh=new THREE.Mesh(geo,mat),glow=new THREE.Mesh(geo.clone(),glowMat);glow.scale.setScalar(1.035+p.glow*.008);
+ if(obj.mesh){obj.group.remove(obj.mesh);obj.mesh.geometry.dispose();obj.mesh.material.dispose();}
+ if(obj.glowMesh){obj.group.remove(obj.glowMesh);obj.glowMesh.geometry.dispose();obj.glowMesh.material.dispose();}
+ obj.mesh=mesh;obj.glowMesh=glow;obj.group.add(mesh,glow);obj.group.position.set(p.x,p.y,p.z);
+ obj.baseY=p.y;obj.animTime=play?0:999;obj.playing=!!play;
+}
+async function addTextObject(params=textParamsFromUI()){
+ const obj={id:'text-'+textIdSeq++,params:{...params},group:new THREE.Group(),mesh:null,glowMesh:null,animTime:0,playing:true,baseY:params.y};
+ scene.add(obj.group);textObjects.push(obj);activeTextId=obj.id;
+ await rebuildTextObject(obj,true);refreshTextSelect();loadTextUI(obj);return obj;
+}
+function replayText(obj=activeText()){if(obj){obj.animTime=0;obj.playing=true;}}
+async function updateActiveText(rebuild=true){
+ const obj=activeText();if(!obj)return;
+ Object.assign(obj.params,textParamsFromUI());obj.group.position.set(obj.params.x,obj.params.y,obj.params.z);obj.baseY=obj.params.y;
+ if(rebuild)await rebuildTextObject(obj,false);
+ refreshTextSelect();
+}
 const envGroup=new THREE.Group(),particleGroup=new THREE.Group(),ringGroup=new THREE.Group();
 scene.add(envGroup,particleGroup,ringGroup);
 const crystals=[];
@@ -711,7 +794,25 @@ function animate(){
   cubeGlow.material.opacity=.05+Math.max(0,1-dist/180)*.14;
   cubeGlow.scale.setScalar(1+dist/300);
  }else cubeGlow.visible=false;
- rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
+ textObjects.forEach(obj=>{
+  const p=obj.params;
+  if(p.faceCamera)obj.group.quaternion.copy(camera.quaternion);
+  if(obj.playing){
+   obj.animTime+=dt;const q=Math.min(1,obj.animTime/Math.max(.05,p.animDuration)),e=ease(q);
+   if(p.animation==='fade'){
+    if(obj.mesh)obj.mesh.material.opacity=e;if(obj.glowMesh)obj.glowMesh.material.opacity=(.08+p.glow*.08)*e;
+    obj.group.scale.setScalar(1);
+   }else if(p.animation==='scale'){
+    obj.group.scale.setScalar(.05+.95*e);if(obj.mesh)obj.mesh.material.opacity=e;if(obj.glowMesh)obj.glowMesh.material.opacity=(.08+p.glow*.08)*e;
+   }else if(p.animation==='rise'){
+    obj.group.position.y=obj.baseY-22*(1-e);if(obj.mesh)obj.mesh.material.opacity=e;if(obj.glowMesh)obj.glowMesh.material.opacity=(.08+p.glow*.08)*e;
+   }else if(p.animation==='type-on'){
+    obj.group.scale.set(e,1,1);if(obj.mesh)obj.mesh.material.opacity=Math.min(1,q*2);if(obj.glowMesh)obj.glowMesh.material.opacity=(.08+p.glow*.08)*Math.min(1,q*2);
+   }
+   if(q>=1){obj.playing=false;obj.group.scale.setScalar(1);obj.group.position.y=obj.baseY;if(obj.mesh)obj.mesh.material.opacity=1;if(obj.glowMesh)obj.glowMesh.material.opacity=.08+p.glow*.08;}
+  }
+ });
+  rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
  const mult=1+(state.audioReact&&state.envReact?bass*3:0),de=dt*state.envSpeed;
  if(state.env)crystals.forEach((c,i)=>{const u=c.userData;c.rotation.x+=u.rs*de*60;c.rotation.y+=u.rs*de*45;u.a+=u.os*de;c.position.set(Math.cos(u.a)*u.r,u.y+Math.sin(t*u.b+i)*u.ba,Math.sin(u.a)*u.r);c.scale.setScalar(1+(state.audioReact&&state.envReact?bass*.8:0));c.material.opacity=Math.min(u.op*mult,1);});
  if(state.particles&&particles){const p=particles.geometry.attributes.position.array;for(let i=0;i<particleCount;i++){const j=i*3;p[j]+=vel[j]*de*60;p[j+1]+=vel[j+1]*de*60;p[j+2]+=vel[j+2]*de*60;const x=p[j],z=p[j+2],a=de*.05,c=Math.cos(a),s=Math.sin(a);p[j]=x*c-z*s;p[j+2]=x*s+z*c;if(Math.hypot(p[j],p[j+1],p[j+2])>300){p[j]=(Math.random()-.5)*180;p[j+1]=(Math.random()-.5)*180;p[j+2]=(Math.random()-.5)*180;}}particles.geometry.attributes.position.needsUpdate=true;particles.material.size=1.5*mult;}
@@ -788,6 +889,23 @@ $('pauseRotBtn').onclick=()=>{state.rotPaused=!state.rotPaused;$('pauseRotBtn').
 document.querySelectorAll('.orient').forEach(b=>b.onclick=()=>{if(currentMesh)currentMesh.rotation[b.dataset.axis]+=THREE.MathUtils.degToRad(+b.dataset.deg);});
 $('orientationResetBtn').onclick=()=>{if(currentMesh)currentMesh.rotation.set(0,0,0);};
 
+$('addTextBtn').onclick=()=>addTextObject();
+$('textObjectSelect').onchange=e=>{activeTextId=e.target.value||null;loadTextUI(activeText());};
+$('textReplayBtn').onclick=()=>replayText();
+$('textDeleteBtn').onclick=()=>{const o=activeText();if(o){disposeTextObject(o);refreshTextSelect();loadTextUI(activeText());}};
+$('textValue').oninput=()=>updateActiveText(true);
+$('textFont').onchange=()=>updateActiveText(true);
+$('textSize').oninput=e=>{setText('textSizeValue',(+e.target.value).toFixed(1));updateActiveText(true);};
+$('textDepth').oninput=e=>{setText('textDepthValue',(+e.target.value).toFixed(1));updateActiveText(true);};
+$('textGlow').oninput=e=>{setText('textGlowValue',(+e.target.value).toFixed(2));updateActiveText(true);};
+$('textColor').oninput=()=>updateActiveText(true);
+$('textAnimation').onchange=()=>updateActiveText(false);
+$('textAnimDuration').oninput=e=>{setText('textAnimDurationValue',(+e.target.value).toFixed(1));updateActiveText(false);};
+$('textX').oninput=e=>{setText('textXValue',Math.round(+e.target.value));updateActiveText(false);};
+$('textY').oninput=e=>{setText('textYValue',Math.round(+e.target.value));updateActiveText(false);};
+$('textZ').oninput=e=>{setText('textZValue',Math.round(+e.target.value));updateActiveText(false);};
+$('textFaceCamera').onchange=()=>updateActiveText(false);
+
 $('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();saveSoon();};
 $('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveSoon();};
 $('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked&&!imageCubeGroup.visible;saveSoon();};
@@ -813,7 +931,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 $('previewBtn').onclick=()=>{document.body.classList.toggle('preview-mode');};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.classList.remove('preview-mode');});
 $('saveProjectBtn').onclick=()=>{
- const payload={version:1,state:{...state},settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition}))};
+ const payload={version:2,state:{...state},settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition})),texts:textObjects.map(o=>({...o.params}))};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=u;a.download='minired-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
@@ -823,7 +941,8 @@ $('projectInput').onchange=async e=>{
   const p=JSON.parse(await f.text());
   Object.assign(state,p.state||{});
   if(p.settings)applySettingsSnapshot(p.settings);
-  alert('Настройки проекта загружены. Медиа-файлы нужно добавить заново; порядок и параметры применятся по именам.');
+  [...textObjects].forEach(disposeTextObject);for(const tp of (p.texts||[]))await addTextObject(tp);
+  alert('Настройки и 3D-текст проекта загружены. Медиа-файлы нужно добавить заново; порядок и параметры применятся по именам.');
  }catch(err){console.error(err);alert('Ошибка проекта');}
 };
 $('resetCinemaBtn').onclick=()=>{
