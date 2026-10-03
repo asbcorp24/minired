@@ -150,6 +150,39 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div class="mini" id="zoomInBtn">➕ Приблизить</div>
 </div>
 
+<div class="section">Авто-камера STL</div>
+<select id="cameraPreset">
+<option value="auto">Auto — лучший ракурс</option>
+<option value="hero">Hero</option>
+<option value="isometric">Isometric</option>
+<option value="front">Front</option>
+<option value="top">Top</option>
+<option value="technical">Technical</option>
+</select>
+<div class="row" style="margin-top:6px">
+<div class="mini" id="applyCameraPreset">📷 Поставить камеру</div>
+<div class="mini" id="autoCameraEach">Auto для каждой STL</div>
+</div>
+
+<div class="section">Технический режим</div>
+<label><input id="technicalMode" type="checkbox">Blueprint / Technical</label>
+<label><input id="technicalWireframe" type="checkbox" checked>Wireframe</label>
+<label><input id="technicalDimensions" type="checkbox" checked>Размерные линии</label>
+<label><input id="technicalAxes" type="checkbox" checked>Координатные оси</label>
+<label><input id="technicalGrid" type="checkbox" checked>Техническая сетка</label>
+<label><input id="technicalLabels" type="checkbox" checked>Подписи размеров</label>
+<div>Единицы</div>
+<select id="technicalUnits">
+<option value="mm">мм</option>
+<option value="cm">см</option>
+<option value="m">м</option>
+<option value="raw">ед.</option>
+</select>
+<div class="row" style="margin-top:6px">
+<div class="mini" id="refreshTechnical">↻ Обновить размеры</div>
+<div class="mini" id="clearTechnical">✕ Скрыть</div>
+</div>
+
 <div class="section">Ориентация STL</div><div class="grid">
 <div class="orient" data-axis="x" data-deg="-90">X −90°</div><div class="orient" data-axis="x" data-deg="90">X +90°</div>
 <div class="orient" data-axis="y" data-deg="-90">Y −90°</div><div class="orient" data-axis="y" data-deg="90">Y +90°</div>
