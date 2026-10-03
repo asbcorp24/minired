@@ -41,6 +41,7 @@ renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
 document.body.appendChild(renderer.domElement);
 renderer.xr.enabled=true;
+renderer.xr.setReferenceSpaceType('local-floor');
 
 const xrRig=new THREE.Group();scene.add(xrRig);
 xrRig.add(camera);
@@ -53,7 +54,7 @@ for(let i=0;i<2;i++){
  ray.name='xr-ray';ray.scale.z=8;c.add(ray);
  const g=renderer.xr.getControllerGrip(i);g.add(xrControllerFactory.createControllerModel(g));xrRig.add(g);xrGrips.push(g);
 }
-let xrHiddenButton=null;
+let xrHiddenButton=null,xrDesktopCameraState=null;
 function syncVrRayVisibility(){const on=$('vrControllerRays')?.checked!==false;xrControllers.forEach(c=>{const r=c.getObjectByName('xr-ray');if(r)r.visible=on;});}
 function resetVrRig(){xrRig.position.set(0,0,0);xrRig.rotation.set(0,0,0);}
 
@@ -859,12 +860,18 @@ function setupXRInteractions(){
   c.addEventListener('squeezestart',()=>{if(idx===1&&currentMesh){state.rotPaused=!state.rotPaused;}});
  });
  renderer.xr.addEventListener('sessionstart',()=>{
-  document.body.classList.add('preview-mode');resetVrRig();clock.start();
+  xrDesktopCameraState={position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),controlsEnabled:controls.enabled};
+  document.body.classList.add('preview-mode');resetVrRig();controls.enabled=false;camera.position.set(0,0,0);camera.quaternion.identity();clock.start();
   if($('vrStatus'))$('vrStatus').textContent='VR активен';
   if($('vrBtn'))$('vrBtn').textContent='🥽 VR активен';
  });
  renderer.xr.addEventListener('sessionend',()=>{
-  document.body.classList.remove('preview-mode');clock.start();
+  document.body.classList.remove('preview-mode');resetVrRig();
+  if(xrDesktopCameraState){
+   camera.position.copy(xrDesktopCameraState.position);camera.quaternion.copy(xrDesktopCameraState.quaternion);
+   controls.target.copy(xrDesktopCameraState.target);controls.enabled=xrDesktopCameraState.controlsEnabled;controls.update();xrDesktopCameraState=null;
+  }else controls.enabled=true;
+  clock.start();
   if($('vrStatus'))$('vrStatus').textContent='VR завершён';
   if($('vrBtn'))$('vrBtn').textContent='🥽 VR';
  });
@@ -879,8 +886,8 @@ function updateXRControls(dt){
   const ax=axes.length>=4?axes[2]:(axes[0]||0),ay=axes.length>=4?axes[3]:(axes[1]||0);
   if(hand==='left'&&$('vrLocomotion')?.checked){
    const speed=state.vrMoveSpeed*dt*10;
-   const yaw=new THREE.Euler(0,camera.rotation.y,0,'YXZ');
-   const forward=new THREE.Vector3(0,0,-1).applyEuler(yaw);const right=new THREE.Vector3(1,0,0).applyEuler(yaw);
+   const xrCam=renderer.xr.getCamera(camera),dir=new THREE.Vector3();xrCam.getWorldDirection(dir);dir.y=0;if(dir.lengthSq()<.001)dir.set(0,0,-1);dir.normalize();
+   const forward=dir,right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
    xrRig.position.addScaledVector(right,ax*speed);xrRig.position.addScaledVector(forward,ay*speed);
   }
   if(hand==='right'&&$('vrScaleControl')?.checked&&Math.abs(ay)>.15){
