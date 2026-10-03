@@ -53,7 +53,7 @@ const imageCube=new THREE.Mesh(new THREE.BoxGeometry(92,92,92),cubeMaterials);
 imageCubeGroup.add(imageCube);
 const cubeEdges=new THREE.LineSegments(new THREE.EdgesGeometry(imageCube.geometry),new THREE.LineBasicMaterial({color:0x00ffff,transparent:true,opacity:.55}));
 imageCube.add(cubeEdges);
-let cubeFaceIndex=0,cubeTransition=null,currentContentType=null;
+let cubeFaceIndex=4,cubeStep=0,cubeTransition=null,currentContentType=null;
 
 const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1};
 
@@ -221,15 +221,21 @@ async function showImageItem(file){
  $('loading').classList.add('active');$('info').textContent='⏳ '+file.name;
  try{
   const texture=await loadImageTexture(file);
-  const nextFace=(cubeFaceIndex+1)%4;
-  const mat=cubeMaterials[nextFace];
-  if(mat.map)mat.map.dispose();
-  mat.map=texture;mat.color.set(0xffffff);mat.needsUpdate=true;
-  imageCubeGroup.visible=true;
-  if(!cubeTransition){
-   cubeTransition={phase:'back',time:0,duration:Math.max(.35,state.transition*.32),fromZ:imageCubeGroup.position.z,toZ:-125,targetFace:nextFace,startRot:imageCube.rotation.y,targetRot:imageCube.rotation.y-Math.PI/2};
+  const sideFaces=[4,0,5,1];
+  if(!imageCubeGroup.visible){
+   cubeStep=0;cubeFaceIndex=sideFaces[0];
+   const mat=cubeMaterials[cubeFaceIndex];
+   if(mat.map)mat.map.dispose();
+   mat.map=texture;mat.color.set(0xffffff);mat.needsUpdate=true;
+   imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.visible=true;cubeTransition=null;
+  }else{
+   cubeStep=(cubeStep+1)%4;
+   const nextFace=sideFaces[cubeStep],mat=cubeMaterials[nextFace];
+   if(mat.map)mat.map.dispose();
+   mat.map=texture;mat.color.set(0xffffff);mat.needsUpdate=true;
+   cubeTransition={phase:'back',time:0,duration:Math.max(.35,state.transition*.32),fromZ:imageCubeGroup.position.z,toZ:-125,targetFace:nextFace,startRot:imageCube.rotation.y,targetRot:-cubeStep*Math.PI/2};
+   cubeFaceIndex=nextFace;
   }
-  cubeFaceIndex=nextFace;
   showLabel(file.name);
   $('info').textContent='🖼 '+file.name;
  }catch(err){console.error(err);$('info').textContent='❌ Ошибка изображения';}
@@ -284,7 +290,7 @@ function addFiles(files){
 function nextModel(){if(!playlist.length)return;playlistIndex=(playlistIndex+1)%playlist.length;playlistTimer=0;renderPlaylist();showPlaylistItem(playlist[playlistIndex]);}
 function clearModels(){
  disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';hideLabel();
- hideImageCube();
+ hideImageCube();cubeStep=0;cubeFaceIndex=4;imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);
  cubeMaterials.forEach(m=>{if(m.map){m.map.dispose();m.map=null;}m.color.set(0x111522);m.needsUpdate=true;});
  currentContentType=null;
 }
