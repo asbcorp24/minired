@@ -172,7 +172,7 @@ function beginTransitionFX(mode){
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(base.slice(),3));
   const m=new THREE.PointsMaterial({size:1.5,map:ptex,color:baseUniforms.fresnel.clone(),transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false});
-  transitionFX=new THREE.Points(g,m);transitionFX.userData={mode,base,dirs};scene.add(transitionFX);
+  transitionFX=new THREE.Points(g,m);transitionFX.userData={mode,base,dirs};transitionFX.rotation.copy(oldMesh.rotation);scene.add(transitionFX);
  }else if(mode==='assemble'){
   const target=sampledPositions(currentMesh.geometry),start=new Float32Array(target.length);
   for(let i=0;i<target.length;i+=3){
@@ -181,7 +181,7 @@ function beginTransitionFX(mode){
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(start.slice(),3));
   const m=new THREE.PointsMaterial({size:1.5,map:ptex,color:baseUniforms.fresnel.clone(),transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false});
-  transitionFX=new THREE.Points(g,m);transitionFX.userData={mode,start,target};scene.add(transitionFX);
+  transitionFX=new THREE.Points(g,m);transitionFX.userData={mode,start,target};transitionFX.rotation.copy(currentMesh.rotation);scene.add(transitionFX);
  }
 }
 function updateTransitionFX(p,e){
@@ -356,7 +356,7 @@ $('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();sa
 $('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveSoon();};
 $('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked;saveSoon();};
 $('gridToggle').onchange=e=>{grid.visible=e.target.checked;saveSoon();};$('showFloor').onchange=e=>{floor.visible=e.target.checked;saveSoon();};
-$('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveSoon();};$('transitionMode').onchange=e=>{state.transitionMode=e.target.value;saveSoon();};$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
+$('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveSoon();};const setTransitionMode=e=>{state.transitionMode=e.target.value;saveSoon();};$('transitionMode').onchange=setTransitionMode;$('transitionMode').oninput=setTransitionMode;$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
 
 $('envToggle').onchange=e=>{state.env=e.target.checked;envGroup.visible=state.env;saveSoon();};
 $('particlesToggle').onchange=e=>{state.particles=e.target.checked;particleGroup.visible=state.particles;saveSoon();};
