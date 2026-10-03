@@ -72,7 +72,7 @@ imageFacePlanes[2].position.set(0, halfCube+.25,0);imageFacePlanes[2].rotation.x
 imageFacePlanes[3].position.set(0,-halfCube-.25,0);imageFacePlanes[3].rotation.x=-Math.PI/2;
 imageFacePlanes[4].position.set(0,0, halfCube+.25);
 imageFacePlanes[5].position.set(0,0,-halfCube-.25);imageFacePlanes[5].rotation.y=Math.PI;
-let cubeFaceIndex=4,cubeStep=0,cubeTransition=null,currentContentType=null,lastCubeTurn=1;
+let cubeFaceIndex=4,cubeStep=0,cubeTransition=null,currentContentType=null,lastCubeTurn=1,imageAdvancePreparing=false;
 
 const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain'};
 
@@ -237,8 +237,42 @@ function updateTransitionFX(p,e){
  }
  transitionFX.geometry.attributes.position.needsUpdate=true;
 }
-function hideImageCube(){imageCubeGroup.visible=false;cubeTransition=null;}
+function hideImageCube(){imageCubeGroup.visible=false;cubeTransition=null;imageAdvancePreparing=false;imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);}
 function showSTLItem(file){hideImageCube();currentContentType='stl';loadSTL(file);}
+function cubeNearPosition(){
+ const dir=new THREE.Vector3().subVectors(camera.position,controls.target).normalize();
+ return dir.multiplyScalar(58);
+}
+function startCubeApproach(){
+ cubeTransition={phase:'approach',time:0,duration:Math.max(.35,Math.min(1.2,playlistInterval*.10)),
+  from:imageCubeGroup.position.clone(),to:cubeNearPosition()};
+}
+function setFaceTexture(faceIndex,texture){
+ const mat=imageFacePlanes[faceIndex].material;
+ if(mat.map)mat.map.dispose();
+ mat.map=texture;mat.needsUpdate=true;
+}
+async function prepareNextImageTurn(nextIndex){
+ if(imageAdvancePreparing||cubeTransition)return false;
+ const item=playlist[nextIndex];
+ if(!item||item.type!=='image')return false;
+ imageAdvancePreparing=true;
+ try{
+  const texture=await createFittedImageTexture(item.file,state.imageFitMode);
+  let dir=Math.random()<.5?-1:1;
+  if(dir===lastCubeTurn)dir*=-1;
+  lastCubeTurn=dir;
+  const nextStep=(cubeStep+dir+4)%4,sideFaces=[4,0,5,1],nextFace=sideFaces[nextStep];
+  setFaceTexture(nextFace,texture);
+  const remaining=Math.max(.35,playlistInterval-playlistTimer);
+  cubeTransition={phase:'exitTurn',time:0,duration:remaining,
+   from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
+   startRot:imageCube.rotation.y,targetRot:-nextStep*Math.PI/2,
+   targetIndex:nextIndex,targetStep:nextStep,targetFace:nextFace};
+  return true;
+ }catch(err){console.error(err);return false;}
+ finally{imageAdvancePreparing=false;}
+}
 function createFittedImageTexture(file,mode='contain',size=1024){
  return new Promise((resolve,reject)=>{
   const url=URL.createObjectURL(file),img=new Image();
@@ -264,24 +298,17 @@ async function showImageItem(file){
  if(currentMesh||oldMesh){disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';}
  $('loading').classList.add('active');$('info').textContent='⏳ '+file.name;
  try{
-  const texture=await createFittedImageTexture(file,state.imageFitMode);
-  const sideFaces=[4,0,5,1];
+  const texture=await createFittedImageTexture(file,state.imageFitMode),sideFaces=[4,0,5,1];
   if(!imageCubeGroup.visible){
-   cubeStep=0;cubeFaceIndex=sideFaces[0];
-   const mat=imageFacePlanes[cubeFaceIndex].material;
-   if(mat.map)mat.map.dispose();mat.map=texture;mat.needsUpdate=true;
-   imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);
-   imageCubeGroup.scale.setScalar(state.objectScale);imageCubeGroup.visible=true;cubeTransition=null;
+   cubeStep=0;cubeFaceIndex=sideFaces[0];setFaceTexture(cubeFaceIndex,texture);
+   imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
+   imageCubeGroup.scale.setScalar(state.objectScale);imageCubeGroup.visible=true;startCubeApproach();
   }else{
-   let dir=Math.random()<.5?-1:1;
-   if(dir===lastCubeTurn)dir*=-1;
-   lastCubeTurn=dir;
-   cubeStep=(cubeStep+dir+4)%4;
-   const nextFace=sideFaces[cubeStep],mat=imageFacePlanes[nextFace].material;
-   if(mat.map)mat.map.dispose();mat.map=texture;mat.needsUpdate=true;
-   cubeTransition={phase:'back',time:0,duration:Math.max(.35,state.transition*.32),
-    fromZ:imageCubeGroup.position.z,toZ:-125,dir,startRot:imageCube.rotation.y,targetRot:-cubeStep*Math.PI/2};
-   cubeFaceIndex=nextFace;
+   let dir=Math.random()<.5?-1:1;if(dir===lastCubeTurn)dir*=-1;lastCubeTurn=dir;
+   const nextStep=(cubeStep+dir+4)%4,nextFace=sideFaces[nextStep];setFaceTexture(nextFace,texture);
+   cubeTransition={phase:'manualTurn',time:0,duration:Math.max(.5,state.transition),
+    from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
+    startRot:imageCube.rotation.y,targetRot:-nextStep*Math.PI/2,targetStep:nextStep,targetFace:nextFace};
   }
   showLabel(file.name);$('info').textContent='🖼 '+file.name;
  }catch(err){console.error(err);$('info').textContent='❌ Ошибка изображения';}
@@ -430,28 +457,62 @@ function animate(){
  if(cubeTransition){
   cubeTransition.time+=dt;
   const p=Math.min(cubeTransition.time/Math.max(.05,cubeTransition.duration),1),e=ease(p);
-  if(cubeTransition.phase==='back'){
-   imageCubeGroup.position.z=THREE.MathUtils.lerp(cubeTransition.fromZ,cubeTransition.toZ,e);
-   imageCube.rotation.y=THREE.MathUtils.lerp(cubeTransition.startRot,cubeTransition.targetRot,e);
-   imageCube.rotation.x=Math.sin(Math.PI*p)*.16;
-   if(p>=1){cubeTransition={phase:'forward',time:0,duration:Math.max(.45,state.transition*.5),fromZ:-125,toZ:0,targetFace:cubeTransition.targetFace,startRot:imageCube.rotation.y,targetRot:imageCube.rotation.y};}
-  }else{
-   imageCubeGroup.position.z=THREE.MathUtils.lerp(cubeTransition.fromZ,cubeTransition.toZ,e);
-   imageCube.rotation.x*=.82;
-   if(p>=1){imageCubeGroup.position.z=0;imageCube.rotation.x=0;cubeTransition=null;}
+  if(cubeTransition.phase==='approach'){
+   imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.to,e);
+   if(p>=1){imageCubeGroup.position.copy(cubeTransition.to);cubeTransition=null;}
+  }else if(cubeTransition.phase==='exitTurn'||cubeTransition.phase==='manualTurn'){
+   const retreatP=Math.min(1,p/.42),turnP=p<.28?0:Math.min(1,(p-.28)/.72);
+   imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.far,ease(retreatP));
+   imageCube.rotation.y=THREE.MathUtils.lerp(cubeTransition.startRot,cubeTransition.targetRot,ease(turnP));
+   imageCube.rotation.x=Math.sin(Math.PI*p)*.08;
+   if(p>=1){
+    cubeStep=cubeTransition.targetStep;cubeFaceIndex=cubeTransition.targetFace;
+    const automatic=cubeTransition.phase==='exitTurn',targetIndex=cubeTransition.targetIndex;
+    imageCubeGroup.position.set(0,0,0);imageCube.rotation.x=0;cubeTransition=null;
+    if(automatic){
+     playlistIndex=targetIndex;playlistTimer=0;renderPlaylist();showLabel(playlist[playlistIndex].name);
+     $('info').textContent='🖼 '+playlist[playlistIndex].name;
+    }
+    startCubeApproach();
+   }
   }
  }
  if(label){labelHold+=dt;if(labelHold<5)labelAlpha+=(1-labelAlpha)*Math.min(dt*3,1);else labelAlpha+=(0-labelAlpha)*Math.min(dt*2,1);label.material.opacity=labelAlpha;label.position.y=-58+Math.sin(t*1.5)*2;}
- if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'&&!cubeTransition){playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';if(playlistTimer>=playlistInterval)nextModel();}else $('plTimer').textContent='—';
+ if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'){
+  if(currentContentType==='image'&&imageCubeGroup.visible){
+   playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';
+   const nextIndex=(playlistIndex+1)%playlist.length,nextItem=playlist[nextIndex];
+   if(playlistTimer>=playlistInterval*.60&&!cubeTransition&&!imageAdvancePreparing&&nextItem&&nextItem.type==='image'){
+    prepareNextImageTurn(nextIndex);
+   }else if(playlistTimer>=playlistInterval&&!cubeTransition&&!imageAdvancePreparing){
+    nextModel();
+   }
+  }else if(!cubeTransition){
+   playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';
+   if(playlistTimer>=playlistInterval)nextModel();
+  }
+ }else $('plTimer').textContent='—';
  if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else controls.update();
  if(currentMesh&&state.autoRotate&&!state.rotPaused){const a=dt*.15*state.speed;[currentMesh,oldMesh].filter(Boolean).forEach(m=>m.rotation[state.axis]+=a);}
- if(imageCubeGroup.visible&&!cubeTransition){imageCube.rotation.y+=dt*state.cubeSpinSpeed;}
+ if(imageCubeGroup.visible&&!cubeTransition){
+  imageCube.rotation.y+=dt*state.cubeSpinSpeed;
+  imageCubeGroup.rotation.x=Math.sin(t*.65)*.012;
+  imageCubeGroup.rotation.z=Math.cos(t*.52)*.014;
+ }else if(imageCubeGroup.visible){
+  imageCubeGroup.rotation.x*=.92;imageCubeGroup.rotation.z*=.92;
+ }
  rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
  const mult=1+(state.audioReact&&state.envReact?bass*3:0),de=dt*state.envSpeed;
  if(state.env)crystals.forEach((c,i)=>{const u=c.userData;c.rotation.x+=u.rs*de*60;c.rotation.y+=u.rs*de*45;u.a+=u.os*de;c.position.set(Math.cos(u.a)*u.r,u.y+Math.sin(t*u.b+i)*u.ba,Math.sin(u.a)*u.r);c.scale.setScalar(1+(state.audioReact&&state.envReact?bass*.8:0));c.material.opacity=Math.min(u.op*mult,1);});
  if(state.particles&&particles){const p=particles.geometry.attributes.position.array;for(let i=0;i<particleCount;i++){const j=i*3;p[j]+=vel[j]*de*60;p[j+1]+=vel[j+1]*de*60;p[j+2]+=vel[j+2]*de*60;const x=p[j],z=p[j+2],a=de*.05,c=Math.cos(a),s=Math.sin(a);p[j]=x*c-z*s;p[j+2]=x*s+z*c;if(Math.hypot(p[j],p[j+1],p[j+2])>300){p[j]=(Math.random()-.5)*180;p[j+1]=(Math.random()-.5)*180;p[j+2]=(Math.random()-.5)*180;}}particles.geometry.attributes.position.needsUpdate=true;particles.material.size=1.5*mult;}
  if(state.rings)rings.forEach(r=>r.rotation.z=r.userData.base+t*r.userData.speed*state.envSpeed);
- updateAudio();composer.render();
+ updateAudio();
+ if(imageCubeGroup.visible){
+  const beat=state.audioReact?bass:0;
+  cubeEdges.material.opacity=Math.min(1,.58+beat*.42);
+  cubeEdges.material.color.setRGB(.05+beat*.65,1+beat*.55,1+beat*.85);
+ }
+ composer.render();
 }
 animate();
 
