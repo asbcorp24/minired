@@ -378,8 +378,9 @@ async function showImageItem(file,{silent=true}={}){
   if(hadSTL){
    const preparedFace=sideFaces[0];
    cubeStep=0;cubeFaceIndex=preparedFace;setFaceTexture(preparedFace,texture);
-   imageCube.rotation.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);faceCubeGroupToCamera();
+   imageCube.rotation.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
    imageCubeGroup.position.copy(sceneBackPosition(state.cubeFarDistance));
+   faceCubeGroupToCamera();
    imageCubeGroup.scale.setScalar(state.objectScale*.82);
    setCubeVisualAlpha(0);imageCubeGroup.visible=true;
    typeTransition={
@@ -621,10 +622,13 @@ function animate(){
    m.material.uniforms.uAlpha.value=1-ease(outP);
    imageCubeGroup.position.lerpVectors(typeTransition.cubeFrom,typeTransition.cubeTo,ease(inP));
    imageCubeGroup.scale.setScalar(state.objectScale*(.82+.18*ease(inP)));
+   imageCubeGroup.lookAt(camera.position);
+   cubeFacingQ.copy(imageCubeGroup.quaternion);
+   imageCube.quaternion.set(0,0,0,1);
    setCubeVisualAlpha(ease(inP));
    if(p>=1){
     disposeModel(m);currentMesh=null;oldMesh=null;transitionState='idle';currentContentType='image';
-    imageCubeGroup.position.copy(typeTransition.cubeTo);imageCubeGroup.scale.setScalar(state.objectScale);setCubeVisualAlpha(1);faceCubeGroupToCamera();
+    imageCubeGroup.position.copy(typeTransition.cubeTo);imageCubeGroup.scale.setScalar(state.objectScale);imageCube.quaternion.set(0,0,0,1);faceCubeGroupToCamera();setCubeVisualAlpha(1);
     showLabel(typeTransition.fileName);$('info').textContent='🖼 '+typeTransition.fileName;
     typeTransition=null;
    }
