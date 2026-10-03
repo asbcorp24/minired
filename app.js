@@ -14,8 +14,6 @@ import {FilmShader} from 'three/addons/shaders/FilmShader.js';
 import {VignetteShader} from 'three/addons/shaders/VignetteShader.js';
 import {FontLoader} from 'three/addons/loaders/FontLoader.js';
 import {TextGeometry} from 'three/addons/geometries/TextGeometry.js';
-import {VRButton} from 'three/addons/webxr/VRButton.js';
-import {XRControllerModelFactory} from 'three/addons/webxr/XRControllerModelFactory.js';
 
 const $=id=>document.getElementById(id);
 const scene=new THREE.Scene();
@@ -40,24 +38,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.05;
 document.body.appendChild(renderer.domElement);
-renderer.xr.enabled=true;
-renderer.xr.setReferenceSpaceType('local-floor');
-
-const xrRig=new THREE.Group();scene.add(xrRig);
-xrRig.add(camera);
-const xrControllerFactory=new XRControllerModelFactory();
-const xrControllers=[],xrGrips=[];
-for(let i=0;i<2;i++){
- const c=renderer.xr.getController(i);xrRig.add(c);xrControllers.push(c);
- const rayGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1)]);
- const ray=new THREE.Line(rayGeo,new THREE.LineBasicMaterial({color:0x66ddff,transparent:true,opacity:.85}));
- ray.name='xr-ray';ray.scale.z=8;c.add(ray);
- const g=renderer.xr.getControllerGrip(i);g.add(xrControllerFactory.createControllerModel(g));xrRig.add(g);xrGrips.push(g);
-}
-let xrHiddenButton=null,xrDesktopCameraState=null;
-function syncVrRayVisibility(){const on=$('vrControllerRays')?.checked!==false;xrControllers.forEach(c=>{const r=c.getObjectByName('xr-ray');if(r)r.visible=on;});}
-function resetVrRig(){xrRig.position.set(0,0,0);xrRig.rotation.set(0,0,0);}
-
+scene.add(camera);
 
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;
@@ -151,7 +132,7 @@ function faceQuaternionForStep(step){
  return q;
 }
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false,vrMoveSpeed:1.5};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false};
 
 const gradePresets={
  none:{contrast:1,saturation:1,temperature:0,tint:0,exposure:1.05},
@@ -850,53 +831,6 @@ function makePath(){const p=[];for(let i=0;i<=200;i++){const t=i/200,a=t*Math.PI
 function resetCamera(){fly=false;controls.enabled=true;camera.position.set(120,90,120);controls.target.set(0,0,0);controls.update();$('playBtn').textContent='▶️ Пролёт камеры';$('playBtn').classList.remove('active');}
 function toggleFly(){if(!currentMesh)return;$('playBtn').classList.toggle('active');if(fly){resetCamera();return;}fly=true;flyTime=0;flyPath=makePath();controls.enabled=false;$('playBtn').textContent='⏸ Остановить';}
 
-function xrSourceForController(controller){
- const session=renderer.xr.getSession();if(!session)return null;
- const i=xrControllers.indexOf(controller);return [...session.inputSources][i]||null;
-}
-function setupXRInteractions(){
- xrControllers.forEach((c,idx)=>{
-  c.addEventListener('selectstart',()=>{if($('vrTriggerNext')?.checked&&playlist.length)nextModel();});
-  c.addEventListener('squeezestart',()=>{if(idx===1&&currentMesh){state.rotPaused=!state.rotPaused;}});
- });
- renderer.xr.addEventListener('sessionstart',()=>{
-  xrDesktopCameraState={position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),controlsEnabled:controls.enabled};
-  document.body.classList.add('preview-mode');resetVrRig();controls.enabled=false;camera.position.set(0,0,0);camera.quaternion.identity();clock.start();
-  if($('vrStatus'))$('vrStatus').textContent='VR активен';
-  if($('vrBtn'))$('vrBtn').textContent='🥽 VR активен';
- });
- renderer.xr.addEventListener('sessionend',()=>{
-  document.body.classList.remove('preview-mode');resetVrRig();
-  if(xrDesktopCameraState){
-   camera.position.copy(xrDesktopCameraState.position);camera.quaternion.copy(xrDesktopCameraState.quaternion);
-   controls.target.copy(xrDesktopCameraState.target);controls.enabled=xrDesktopCameraState.controlsEnabled;controls.update();xrDesktopCameraState=null;
-  }else controls.enabled=true;
-  clock.start();
-  if($('vrStatus'))$('vrStatus').textContent='VR завершён';
-  if($('vrBtn'))$('vrBtn').textContent='🥽 VR';
- });
-}
-function updateXRControls(dt){
- if(!renderer.xr.isPresenting)return;
- const session=renderer.xr.getSession();if(!session)return;
- const sources=[...session.inputSources];
- for(let i=0;i<sources.length;i++){
-  const src=sources[i],gp=src.gamepad;if(!gp)continue;
-  const axes=gp.axes||[],hand=src.handedness;
-  const ax=axes.length>=4?axes[2]:(axes[0]||0),ay=axes.length>=4?axes[3]:(axes[1]||0);
-  if(hand==='left'&&$('vrLocomotion')?.checked){
-   const speed=state.vrMoveSpeed*dt*10;
-   const xrCam=renderer.xr.getCamera(camera),dir=new THREE.Vector3();xrCam.getWorldDirection(dir);dir.y=0;if(dir.lengthSq()<.001)dir.set(0,0,-1);dir.normalize();
-   const forward=dir,right=new THREE.Vector3().crossVectors(forward,new THREE.Vector3(0,1,0)).normalize();
-   xrRig.position.addScaledVector(right,ax*speed);xrRig.position.addScaledVector(forward,ay*speed);
-  }
-  if(hand==='right'&&$('vrScaleControl')?.checked&&Math.abs(ay)>.15){
-   const delta=-ay*dt*.8;
-   if(currentMesh)setObjectScale(state.objectScale+delta);
-   else if(imageCubeGroup.visible)setObjectScale(state.objectScale+delta);
-  }
- }
-}
 let audioContext=null,analyser=null,audioSource=null,audioBuffer=null,audioData=null,audioPlaying=false,audioStart=0,audioPause=0,bass=0,mid=0,high=0,recordDest=null;
 async function loadAudio(file){
  if(!file)return;
@@ -929,23 +863,61 @@ function updateAudio(){
  baseUniforms.audio=bass;innerLight.intensity=2+bass*5+mid*1.5;syncMaterials();
 }
 
+const stereoCamera=new THREE.StereoCamera();
+let stereoRenderer=null,stereoRecording=false,recordStream=null;
+function stereoSettings(){
+ const res=($('stereoResolution')?.value||'3840x1080').split('x').map(Number);
+ return {w:res[0]||3840,h:res[1]||1080,fps:+($('stereoFps')?.value||60),bitrate:+($('stereoBitrate')?.value||24)*1000000,eyeSep:+($('stereoEyeSep')?.value||6.4),focus:+($('stereoFocus')?.value||160),swap:$('stereoSwapEyes')?.checked||false};
+}
+function ensureStereoRenderer(){
+ if(stereoRenderer)return stereoRenderer;
+ stereoRenderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:false});
+ stereoRenderer.setPixelRatio(1);stereoRenderer.toneMapping=renderer.toneMapping;stereoRenderer.toneMappingExposure=renderer.toneMappingExposure;
+ stereoRenderer.outputColorSpace=renderer.outputColorSpace;
+ stereoRenderer.domElement.style.position='fixed';stereoRenderer.domElement.style.left='-10000px';stereoRenderer.domElement.style.top='0';stereoRenderer.domElement.style.width='1px';stereoRenderer.domElement.style.height='1px';stereoRenderer.domElement.style.opacity='0';stereoRenderer.domElement.style.pointerEvents='none';
+ document.body.appendChild(stereoRenderer.domElement);return stereoRenderer;
+}
+function renderStereoFrame(){
+ if(!stereoRecording||!stereoRenderer)return;
+ const cfg=stereoSettings(),half=Math.floor(cfg.w/2);
+ stereoRenderer.setSize(cfg.w,cfg.h,false);stereoRenderer.setScissorTest(true);stereoRenderer.autoClear=false;stereoRenderer.clear();
+ const prevAspect=camera.aspect,prevFocus=camera.focus;
+ camera.aspect=half/cfg.h;camera.focus=cfg.focus;camera.updateProjectionMatrix();
+ stereoCamera.eyeSep=cfg.eyeSep;stereoCamera.update(camera);
+ const left=cfg.swap?stereoCamera.cameraR:stereoCamera.cameraL,right=cfg.swap?stereoCamera.cameraL:stereoCamera.cameraR;
+ stereoRenderer.setViewport(0,0,half,cfg.h);stereoRenderer.setScissor(0,0,half,cfg.h);stereoRenderer.render(scene,left);
+ stereoRenderer.setViewport(half,0,cfg.w-half,cfg.h);stereoRenderer.setScissor(half,0,cfg.w-half,cfg.h);stereoRenderer.render(scene,right);
+ stereoRenderer.setScissorTest(false);stereoRenderer.autoClear=true;
+ camera.aspect=prevAspect;camera.focus=prevFocus;camera.updateProjectionMatrix();
+}
 let recorder=null,chunks=[],recStart=0,recTimer=null;
 function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');}
 function startRecording(){
- const stream=renderer.domElement.captureStream(60);
+ const useStereo=$('stereoRecord')?.checked===true,cfg=stereoSettings();
+ const sourceCanvas=useStereo?ensureStereoRenderer().domElement:renderer.domElement;
+ stereoRecording=useStereo;if(useStereo)renderStereoFrame();
+ const stream=sourceCanvas.captureStream(useStereo?cfg.fps:60);recordStream=stream;
  if(analyser&&audioPlaying&&audioContext){try{if(recordDest)analyser.disconnect(recordDest);}catch(e){}recordDest=audioContext.createMediaStreamDestination();analyser.connect(recordDest);const t=recordDest.stream.getAudioTracks()[0];if(t)stream.addTrack(t);}
  const list=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
- const mime=list.find(x=>MediaRecorder.isTypeSupported(x))||'video/webm';chunks=[];recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:8000000});
+ const mime=list.find(x=>MediaRecorder.isTypeSupported(x))||'video/webm';chunks=[];
+ recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:useStereo?cfg.bitrate:8000000});
  recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
- recorder.onstop=()=>{const b=new Blob(chunks,{type:'video/webm'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='stl-clip-'+new Date().toISOString().replace(/[:.]/g,'-')+'.webm';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);if(recordDest&&analyser)try{analyser.disconnect(recordDest);}catch(e){}recordDest=null;stream.getTracks().forEach(t=>t.stop());};
- recorder.start(100);recStart=Date.now();$('recordBtn').classList.add('recording');$('recordBtn').textContent='⏹ Остановить запись';$('rec').classList.add('active');recTimer=setInterval(()=>{$('recTime').textContent=fmt((Date.now()-recStart)/1000);},200);
+ recorder.onstop=()=>{
+  const b=new Blob(chunks,{type:'video/webm'}),u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u;a.download=(useStereo?'minired-stereo-sbs-':'stl-clip-')+new Date().toISOString().replace(/[:.]/g,'-')+'.webm';a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+  if(recordDest&&analyser)try{analyser.disconnect(recordDest);}catch(e){}recordDest=null;
+  stream.getTracks().forEach(t=>t.stop());recordStream=null;stereoRecording=false;
+ };
+ recorder.start(100);recStart=Date.now();$('recordBtn').classList.add('recording');$('recordBtn').textContent=useStereo?'⏹ Остановить Stereo запись':'⏹ Остановить запись';$('rec').classList.add('active');
+ recTimer=setInterval(()=>{$('recTime').textContent=fmt((Date.now()-recStart)/1000);},200);
 }
-function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();$('recordBtn').classList.remove('recording');$('recordBtn').textContent='⏺ Запись клипа';$('rec').classList.remove('active');clearInterval(recTimer);}
+function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();$('recordBtn').classList.remove('recording');$('recordBtn').textContent='⏺ Запись клипа';$('rec').classList.remove('active');clearInterval(recTimer);stereoRecording=false;}
 
 function ease(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
 const clock=new THREE.Clock(),look=new THREE.Vector3();
 function animate(){
- const dt=clock.getDelta(),t=clock.elapsedTime;updateXRControls(dt);scanlinePass.uniforms.time.value=t;filmPass.uniforms.time.value=t;
+ const dt=clock.getDelta(),t=clock.elapsedTime;scanlinePass.uniforms.time.value=t;filmPass.uniforms.time.value=t;
  if(transitionState==='cross'){
   transitionTime+=dt;const p=Math.min(transitionTime/Math.max(state.transition,.05),1),e=ease(p);
   const mode=state.transitionMode;
@@ -1077,7 +1049,7 @@ function animate(){
    if(playlistTimer>=itemDuration)nextModel();
   }
  }else $('plTimer').textContent='—';
- if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else if(!renderer.xr.isPresenting)controls.update();
+ if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else controls.update();
  if(currentMesh&&state.autoRotate&&!state.rotPaused){const a=dt*.15*state.speed;[currentMesh,oldMesh].filter(Boolean).forEach(m=>m.rotation[state.axis]+=a);}
  if(imageCubeGroup.visible){
   const sway=state.cubeSway*.01;
@@ -1155,7 +1127,7 @@ function animate(){
 
   bokehPass.enabled=$('dofToggle').checked;
  }
- if(renderer.xr.isPresenting)renderer.render(scene,camera);else composer.render();
+ composer.render();renderStereoFrame();
 }
 renderer.setAnimationLoop(animate);
 
@@ -1223,25 +1195,10 @@ $('textY').oninput=e=>{setText('textYValue',Math.round(+e.target.value));updateA
 $('textZ').oninput=e=>{setText('textZValue',Math.round(+e.target.value));updateActiveText(false);};
 $('textFaceCamera').onchange=()=>updateActiveText(false);
 
-setupXRInteractions();
-syncVrRayVisibility();
-if(navigator.xr){
- navigator.xr.isSessionSupported('immersive-vr').then(ok=>{
-  if($('vrStatus'))$('vrStatus').textContent=ok?'WebXR VR доступен':'VR не поддерживается устройством/браузером';
-  if(ok){xrHiddenButton=VRButton.createButton(renderer);xrHiddenButton.style.display='none';document.body.appendChild(xrHiddenButton);}
- }).catch(()=>{if($('vrStatus'))$('vrStatus').textContent='Не удалось проверить WebXR';});
-}else if($('vrStatus'))$('vrStatus').textContent='WebXR API недоступен';
-$('vrBtn').onclick=()=>{
- if(renderer.xr.isPresenting){renderer.xr.getSession()?.end();return;}
- if(xrHiddenButton)xrHiddenButton.click();else $('info').textContent='🥽 VR недоступен в этом браузере/устройстве';
-};
-$('vrExitBtn').onclick=()=>renderer.xr.getSession()?.end();
-$('vrResetBtn').onclick=resetVrRig;
-$('vrControllerRays').onchange=()=>{syncVrRayVisibility();saveSoon();};
-$('vrMoveSpeed').oninput=e=>{state.vrMoveSpeed=+e.target.value;setText('vrMoveSpeedValue',state.vrMoveSpeed.toFixed(1));saveSoon();};
-$('vrLocomotion').onchange=saveSoon;
-$('vrTriggerNext').onchange=saveSoon;
-$('vrScaleControl').onchange=saveSoon;
+$('stereoEyeSep').oninput=e=>{setText('stereoEyeSepValue',(+e.target.value).toFixed(1));saveSoon();};
+$('stereoFocus').oninput=e=>{setText('stereoFocusValue',Math.round(+e.target.value));saveSoon();};
+$('stereoBitrate').oninput=e=>{setText('stereoBitrateValue',Math.round(+e.target.value));saveSoon();};
+$('stereoRecord').onchange=saveSoon;$('stereoResolution').onchange=saveSoon;$('stereoFps').onchange=saveSoon;$('stereoSwapEyes').onchange=saveSoon;
 
 $('applyCameraPreset').onclick=()=>applyCameraView($('cameraPreset').value);
 $('autoCameraEach').onclick=()=>{state.autoCameraEach=!state.autoCameraEach;$('autoCameraEach').classList.toggle('active',state.autoCameraEach);$('autoCameraEach').textContent=state.autoCameraEach?'✓ Auto для каждой STL':'Auto для каждой STL';saveSoon();};
@@ -1331,7 +1288,7 @@ $('resetCinemaBtn').onclick=()=>{
  glassMaterial.opacity=state.cubeGlassOpacity;saveSoon();
 };
 function saveSettingsSnapshot(){
- const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits','vrLocomotion','vrControllerRays','vrTriggerNext','vrScaleControl','vrMoveSpeed'];
+ const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits','stereoRecord','stereoEyeSep','stereoFocus','stereoResolution','stereoFps','stereoBitrate','stereoSwapEyes'];
  const o={};ids.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
 }
 function applySettingsSnapshot(o){Object.entries(o||{}).forEach(([id,v])=>{const e=$(id);if(!e)return;if(e.type==='checkbox'){e.checked=!!v;e.dispatchEvent(new Event('change'));}else{e.value=v;e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});}
@@ -1349,7 +1306,6 @@ function restoreSettings(){
 restoreSettings();
 if($('scenePreset')&&$('scenePreset').value!=='custom'&&scenePresets[$('scenePreset').value])applyScenePresetByName($('scenePreset').value);
 else if($('gradePreset'))applyGradePreset($('gradePreset').value||'none');
-state.vrMoveSpeed=+$('vrMoveSpeed').value||1.5;setText('vrMoveSpeedValue',state.vrMoveSpeed.toFixed(1));
 state.cubeSpinSpeed=+$('cubeSpinSpeed').value||.3;
 setText('cubeSpinSpeedValue',state.cubeSpinSpeed.toFixed(2));
 setObjectScale(+$('objectScale').value||1);
