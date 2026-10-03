@@ -165,6 +165,13 @@ async function getFont(name){
  fontCache.set(name,font);return font;
 }
 function activeText(){return textObjects.find(x=>x.id===activeTextId)||null;}
+function playlistTextItem(obj){return playlist.find(x=>x.type==='text'&&x.textId===obj?.id)||null;}
+function hideAllText(exceptId=null){textObjects.forEach(o=>o.group.visible=o.id===exceptId);}
+function defaultTextDuration(obj){
+ const p=obj.params,letters=Math.max(1,obj.letters?.length||[...(p.text||'')].filter(c=>c!==' ').length);
+ const anim=p.animation==='letter-burst'?p.animDuration+Math.max(0,letters-1)*(p.letterDelay??.08):p.animDuration;
+ return Math.max(5,Math.ceil(anim+2));
+}
 function textParamsFromUI(){
  return {
   text:$('textValue')?.value||'Текст',
@@ -190,6 +197,8 @@ function disposeTextObject(obj){
  obj.glowMesh?.geometry?.dispose();obj.glowMesh?.material?.dispose();
  obj.letters?.forEach(l=>{l.mesh?.geometry?.dispose();l.mesh?.material?.dispose();l.glow?.geometry?.dispose();l.glow?.material?.dispose();});
  const i=textObjects.indexOf(obj);if(i>=0)textObjects.splice(i,1);
+ for(let p=playlist.length-1;p>=0;p--)if(playlist[p].type==='text'&&playlist[p].textId===obj.id)playlist.splice(p,1);
+ if(playlistIndex>=playlist.length)playlistIndex=Math.max(0,playlist.length-1);
 }
 function refreshTextSelect(){
  const s=$('textObjectSelect');if(!s)return;
@@ -256,16 +265,24 @@ async function rebuildTextObject(obj,play=false){
  obj.group.position.set(p.x,p.y,p.z);
  obj.baseY=p.y;obj.animTime=play?0:999;obj.playing=!!play;
 }
-async function addTextObject(params=textParamsFromUI()){
+async function addTextObject(params=textParamsFromUI(),addToPlaylist=true){
  const obj={id:'text-'+textIdSeq++,params:{letterDelay:.08,letterDepth:70,letterSpin:35,letterFlash:1.5,...params},group:new THREE.Group(),mesh:null,glowMesh:null,letters:[],animTime:0,playing:true,baseY:params.y};
  scene.add(obj.group);textObjects.push(obj);activeTextId=obj.id;
- await rebuildTextObject(obj,true);refreshTextSelect();loadTextUI(obj);return obj;
+ await rebuildTextObject(obj,true);
+ if(addToPlaylist){
+  playlist.push({name:'✦ '+obj.params.text,type:'text',textId:obj.id,duration:defaultTextDuration(obj),transition:obj.params.animation});
+  playlistIndex=playlist.length-1;playlistTimer=0;renderPlaylist();
+  showPlaylistItem(playlist[playlistIndex]);
+ }
+ refreshTextSelect();loadTextUI(obj);return obj;
 }
 function replayText(obj=activeText()){if(obj){obj.animTime=0;obj.playing=true;if(obj.letters)obj.letters.forEach(l=>{l.group.visible=false;l.group.position.set(l.baseX,l.baseY,l.baseZ-(obj.params.letterDepth||70));l.group.rotation.set(0,0,0);l.group.scale.setScalar(.05);});}}
 async function updateActiveText(rebuild=true){
  const obj=activeText();if(!obj)return;
  Object.assign(obj.params,textParamsFromUI());obj.group.position.set(obj.params.x,obj.params.y,obj.params.z);obj.baseY=obj.params.y;
  if(rebuild)await rebuildTextObject(obj,false);
+ const pi=playlistTextItem(obj);
+ if(pi){pi.name='✦ '+obj.params.text;pi.transition=obj.params.animation;pi.duration=Math.max(pi.duration||0,defaultTextDuration(obj));renderPlaylist();}
  refreshTextSelect();
 }
 const envGroup=new THREE.Group(),particleGroup=new THREE.Group(),ringGroup=new THREE.Group();
@@ -538,8 +555,19 @@ async function showImageItem(file,{silent=true}={}){
 }
 function showPlaylistItem(item){
  if(!item)return;
- if(item.type==='image'){state.cubeTransitionStyle=item.transition||state.cubeTransitionStyle;showImageItem(item.file,{silent:true});}
- else{state.transitionMode=item.transition||state.transitionMode;showSTLItem(item.file);}
+ if(item.type==='text'){
+  hideImageCube();disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';
+  currentContentType='text';hideLabel();
+  const obj=textObjects.find(o=>o.id===item.textId);
+  if(obj){
+   activeTextId=obj.id;hideAllText(obj.id);obj.group.visible=true;replayText(obj);loadTextUI(obj);refreshTextSelect();
+   $('info').textContent='✦ 3D-текст: '+obj.params.text;
+  }
+ }else if(item.type==='image'){
+  hideAllText();state.cubeTransitionStyle=item.transition||state.cubeTransitionStyle;showImageItem(item.file,{silent:true});
+ }else{
+  hideAllText();state.transitionMode=item.transition||state.transitionMode;showSTLItem(item.file);
+ }
 }
 function loadSTL(file,{silent=false,fromCube=false}={}){
  if(!file)return;
@@ -591,17 +619,17 @@ function renderPlaylist(){
  $('plCount').textContent=playlist.length;$('plList').innerHTML='';$('playlist').style.display=playlist.length?'block':'none';
  playlist.forEach((x,i)=>{
   const d=document.createElement('div');d.className='pl-item'+(i===playlistIndex?' active':'');d.draggable=true;d.dataset.index=i;
-  const name=x.name.replace(/\.stl$/i,'');d.innerHTML='<span>'+(i+1)+'</span><span class="pl-name"></span><span class="remove">✕</span>';
+  const name=(x.name||'Без названия').replace(/\.stl$/i,'');d.innerHTML='<span>'+(i+1)+'</span><span class="pl-name"></span><span class="remove">✕</span>';
   d.querySelector('.pl-name').textContent=name;
   const meta=document.createElement('span');meta.className='pl-meta';meta.textContent=(x.duration||playlistInterval)+'с';meta.title='Клик — изменить длительность';d.insertBefore(meta,d.querySelector('.remove'));
   meta.onclick=e=>{e.stopPropagation();const v=+prompt('Длительность элемента, секунд',x.duration||playlistInterval);if(Number.isFinite(v)&&v>=1){x.duration=Math.min(600,v);renderPlaylist();}};
-  d.oncontextmenu=e=>{e.preventDefault();const modes=x.type==='image'?['fly-turn','dissolve','particles','holo']:['crossfade','particles','wire-scan','assemble'];const pos=Math.max(0,modes.indexOf(x.transition));x.transition=modes[(pos+1)%modes.length];$('info').textContent='Переход: '+x.transition;};
+  d.oncontextmenu=e=>{e.preventDefault();const modes=x.type==='image'?['fly-turn','dissolve','particles','holo']:x.type==='text'?['fade','scale','rise','type-on','letter-burst']:['crossfade','particles','wire-scan','assemble'];const pos=Math.max(0,modes.indexOf(x.transition));x.transition=modes[(pos+1)%modes.length];if(x.type==='text'){const o=textObjects.find(o=>o.id===x.textId);if(o){o.params.animation=x.transition;if(o.id===activeTextId){$('textAnimation').value=x.transition;}rebuildTextObject(o,false);}}$('info').textContent='Переход: '+x.transition;};
   d.ondragstart=()=>{d.classList.add('dragging');window.__plDrag=i;};
   d.ondragend=()=>d.classList.remove('dragging');
   d.ondragover=e=>e.preventDefault();
   d.ondrop=e=>{e.preventDefault();const from=window.__plDrag;if(from==null||from===i)return;const [m]=playlist.splice(from,1);playlist.splice(i,0,m);playlistIndex=playlist.indexOf(m);renderPlaylist();};
   d.onclick=e=>{if(e.target.classList.contains('remove'))return;playlistIndex=i;playlistTimer=0;renderPlaylist();showPlaylistItem(x);};
-  d.querySelector('.remove').onclick=e=>{e.stopPropagation();playlist.splice(i,1);if(playlistIndex>=playlist.length)playlistIndex=0;renderPlaylist();if(playlist.length)showPlaylistItem(playlist[playlistIndex]);else clearModels();};
+  d.querySelector('.remove').onclick=e=>{e.stopPropagation();const removed=playlist[i];if(removed?.type==='text'){const o=textObjects.find(o=>o.id===removed.textId);if(o){scene.remove(o.group);o.mesh?.geometry?.dispose();o.mesh?.material?.dispose();o.glowMesh?.geometry?.dispose();o.glowMesh?.material?.dispose();o.letters?.forEach(l=>{l.mesh?.geometry?.dispose();l.mesh?.material?.dispose();l.glow?.geometry?.dispose();l.glow?.material?.dispose();});const ti=textObjects.indexOf(o);if(ti>=0)textObjects.splice(ti,1);}}playlist.splice(i,1);if(playlistIndex>=playlist.length)playlistIndex=Math.max(0,playlist.length-1);refreshTextSelect();renderPlaylist();if(playlist.length)showPlaylistItem(playlist[playlistIndex]);else clearModels();};
   $('plList').appendChild(d);
  });
 }
@@ -803,7 +831,7 @@ function animate(){
    label.scale.set(160,34,1);
   }
  }
- if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'&&!typeTransition){
+ if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible||currentContentType==='text')&&transitionState==='idle'&&!typeTransition){
   if(currentContentType==='image'&&imageCubeGroup.visible){
    const itemDuration=playlist[playlistIndex]?.duration||playlistInterval;playlistTimer+=dt;$('plTimer').textContent=Math.max(0,itemDuration-playlistTimer).toFixed(1)+'с';
    const nextIndex=(playlistIndex+1)%playlist.length,nextItem=playlist[nextIndex];
@@ -813,8 +841,9 @@ function animate(){
     nextModel();
    }
   }else if(!cubeTransition){
-   playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';
-   if(playlistTimer>=(playlist[playlistIndex]?.duration||playlistInterval))nextModel();
+   const itemDuration=playlist[playlistIndex]?.duration||playlistInterval;
+   playlistTimer+=dt;$('plTimer').textContent=Math.max(0,itemDuration-playlistTimer).toFixed(1)+'с';
+   if(playlistTimer>=itemDuration)nextModel();
   }
  }else $('plTimer').textContent='—';
  if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else controls.update();
@@ -945,7 +974,7 @@ $('orientationResetBtn').onclick=()=>{if(currentMesh)currentMesh.rotation.set(0,
 $('addTextBtn').onclick=()=>addTextObject();
 $('textObjectSelect').onchange=e=>{activeTextId=e.target.value||null;loadTextUI(activeText());};
 $('textReplayBtn').onclick=()=>replayText();
-$('textDeleteBtn').onclick=()=>{const o=activeText();if(o){disposeTextObject(o);refreshTextSelect();loadTextUI(activeText());}};
+$('textDeleteBtn').onclick=()=>{const o=activeText();if(o){disposeTextObject(o);refreshTextSelect();renderPlaylist();if(playlist.length){playlistIndex=Math.min(playlistIndex,playlist.length-1);showPlaylistItem(playlist[playlistIndex]);}else clearModels();loadTextUI(activeText());}};
 $('textValue').oninput=()=>updateActiveText(true);
 $('textFont').onchange=()=>updateActiveText(true);
 $('textSize').oninput=e=>{setText('textSizeValue',(+e.target.value).toFixed(1));updateActiveText(true);};
@@ -988,7 +1017,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 $('previewBtn').onclick=()=>{document.body.classList.toggle('preview-mode');};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.classList.remove('preview-mode');});
 $('saveProjectBtn').onclick=()=>{
- const payload={version:2,state:{...state},settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition})),texts:textObjects.map(o=>({...o.params}))};
+ const payload={version:2,state:{...state},settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=u;a.download='minired-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
@@ -998,8 +1027,11 @@ $('projectInput').onchange=async e=>{
   const p=JSON.parse(await f.text());
   Object.assign(state,p.state||{});
   if(p.settings)applySettingsSnapshot(p.settings);
-  [...textObjects].forEach(disposeTextObject);for(const tp of (p.texts||[]))await addTextObject(tp);
-  alert('Настройки и 3D-текст проекта загружены. Медиа-файлы нужно добавить заново; порядок и параметры применятся по именам.');
+  [...textObjects].forEach(disposeTextObject);
+  const restoredTexts=[];for(const tp of (p.texts||[]))restoredTexts.push(await addTextObject(tp,false));
+  const restoredTextItems=(p.playlist||[]).filter(x=>x.type==='text'&&x.textIndex!=null&&restoredTexts[x.textIndex]).map(x=>({...x,textId:restoredTexts[x.textIndex].id}));
+  playlist.push(...restoredTextItems);renderPlaylist();
+  alert('Настройки и 3D-текст проекта загружены. Текст восстановлен в плейлисте; медиа-файлы нужно добавить заново.');
  }catch(err){console.error(err);alert('Ошибка проекта');}
 };
 $('resetCinemaBtn').onclick=()=>{
