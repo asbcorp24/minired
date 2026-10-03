@@ -72,7 +72,7 @@ imageFacePlanes[2].position.set(0, halfCube+.25,0);imageFacePlanes[2].rotation.x
 imageFacePlanes[3].position.set(0,-halfCube-.25,0);imageFacePlanes[3].rotation.x=-Math.PI/2;
 imageFacePlanes[4].position.set(0,0, halfCube+.25);
 imageFacePlanes[5].position.set(0,0,-halfCube-.25);imageFacePlanes[5].rotation.y=Math.PI;
-let cubeFaceIndex=4,cubeStep=0,cubeTransition=null,currentContentType=null,lastCubeTurn=1,imageAdvancePreparing=false;
+let cubeFaceIndex=4,cubeStep=0,cubeTransition=null,currentContentType=null,lastCubeTurn=1,imageAdvancePreparing=false,typeTransition=null;
 
 const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain'};
 
@@ -257,6 +257,20 @@ function setFaceTexture(faceIndex,texture){
  if(mat.map)mat.map.dispose();
  mat.map=texture;mat.color.set(0xffffff);mat.needsUpdate=true;face.visible=true;
 }
+function setCubeVisualAlpha(a){
+ const alpha=THREE.MathUtils.clamp(a,0,1);
+ glassMaterial.opacity=.13*alpha;
+ cubeEdges.material.opacity=.9*alpha;
+ imageFacePlanes.forEach(face=>{if(face.visible)face.material.opacity=alpha;});
+}
+function sceneBackPosition(distance=260){
+ const dir=new THREE.Vector3().subVectors(controls.target,camera.position).normalize();
+ return dir.multiplyScalar(distance);
+}
+function sceneFrontPosition(distance=58){
+ const dir=new THREE.Vector3().subVectors(camera.position,controls.target).normalize();
+ return dir.multiplyScalar(distance);
+}
 async function prepareNextImageTurn(nextIndex){
  if(imageAdvancePreparing||cubeTransition)return false;
  const item=playlist[nextIndex];
@@ -301,20 +315,35 @@ function createFittedImageTexture(file,mode='contain',size=2048){
  });
 }
 async function showImageItem(file,{silent=true}={}){
- const hadSTL=!!(currentMesh||oldMesh);
+ const hadSTL=!!currentMesh;
  if(!silent){$('loading').classList.add('active');$('info').textContent='⏳ '+file.name;}
  try{
   const texture=await createFittedImageTexture(file,state.imageFitMode),sideFaces=[4,0,5,1];
-  currentContentType='image';disposeTransitionFX();
   if(hadSTL){
-   disposeModel(currentMesh);disposeModel(oldMesh);
-   currentMesh=oldMesh=null;transitionState='idle';
-  }
-  if(!imageCubeGroup.visible){
+   const preparedFace=sideFaces[0];
+   cubeStep=0;cubeFaceIndex=preparedFace;setFaceTexture(preparedFace,texture);
+   imageCube.rotation.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
+   imageCubeGroup.position.copy(sceneBackPosition(260));
+   imageCubeGroup.scale.setScalar(state.objectScale*.82);
+   setCubeVisualAlpha(0);imageCubeGroup.visible=true;
+   typeTransition={
+    kind:'stl-to-cube',time:0,duration:Math.max(.8,state.transition),
+    stl:currentMesh,
+    stlStartPos:currentMesh.position.clone(),
+    stlStartScale:currentMesh.scale.clone(),
+    cubeFrom:imageCubeGroup.position.clone(),
+    cubeTo:sceneFrontPosition(58),
+    fileName:file.name
+   };
+   currentContentType='transition';
+  }else if(!imageCubeGroup.visible){
+   currentContentType='image';
    cubeStep=0;cubeFaceIndex=sideFaces[0];setFaceTexture(cubeFaceIndex,texture);
    imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);
-   imageCubeGroup.scale.setScalar(state.objectScale);imageCubeGroup.visible=true;startCubeApproach();
+   imageCubeGroup.scale.setScalar(state.objectScale);setCubeVisualAlpha(1);imageCubeGroup.visible=true;startCubeApproach();
+   showLabel(file.name);$('info').textContent='🖼 '+file.name;
   }else{
+   currentContentType='image';
    let dir=Math.random()<.5?-1:1;
    if(dir===lastCubeTurn&&Math.random()<.65)dir=-dir;
    lastCubeTurn=dir;
@@ -323,8 +352,8 @@ async function showImageItem(file,{silent=true}={}){
    cubeTransition={phase:'manualTurn',time:0,duration:Math.max(.5,state.transition),
     from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
     startRot:imageCube.rotation.y,targetRot:imageCube.rotation.y+quarterTurn,targetStep:nextStep,targetFace:nextFace};
+   showLabel(file.name);$('info').textContent='🖼 '+file.name;
   }
-  showLabel(file.name);$('info').textContent='🖼 '+file.name;
  }catch(err){
   console.error(err);$('info').textContent='❌ Ошибка изображения';
  }
@@ -343,14 +372,31 @@ function loadSTL(file,{silent=false,fromCube=false}={}){
  r.onload=e=>{
   try{
    const next=meshFromBuffer(e.target.result);
-   if(fromCube&&imageCubeGroup.visible)hideImageCube();
-   scene.add(next);
-   if(currentMesh){oldMesh=currentMesh;currentMesh=next;transitionState='cross';beginTransitionFX(state.transitionMode);}
-   else{currentMesh=next;transitionState='in';}
-   currentContentType='stl';
-   transitionTime=0;showLabel(file.name);
-   $('info').textContent='✅ '+file.name+' | '+Math.round(next.geometry.attributes.position.count/3).toLocaleString()+' треуг.';
-   syncMaterials();
+   if(fromCube&&imageCubeGroup.visible){
+    next.material.uniforms.uAlpha.value=0;
+    next.position.copy(sceneBackPosition(260));
+    next.scale.multiplyScalar(.82);
+    scene.add(next);
+    typeTransition={
+     kind:'cube-to-stl',time:0,duration:Math.max(.8,state.transition),
+     stl:next,
+     stlFrom:next.position.clone(),
+     stlTo:new THREE.Vector3(0,0,0),
+     stlTargetScale:new THREE.Vector3(state.objectScale,state.objectScale,state.objectScale),
+     cubeFrom:imageCubeGroup.position.clone(),
+     cubeTo:sceneBackPosition(300),
+     fileName:file.name
+    };
+    currentContentType='transition';
+   }else{
+    scene.add(next);
+    if(currentMesh){oldMesh=currentMesh;currentMesh=next;transitionState='cross';beginTransitionFX(state.transitionMode);}
+    else{currentMesh=next;transitionState='in';}
+    currentContentType='stl';
+    transitionTime=0;showLabel(file.name);
+    $('info').textContent='✅ '+file.name+' | '+Math.round(next.geometry.attributes.position.count/3).toLocaleString()+' треуг.';
+    syncMaterials();
+   }
   }catch(err){
    console.error(err);$('info').textContent='❌ '+err.message;transitionState='idle';
   }
@@ -477,6 +523,42 @@ function animate(){
   transitionTime+=dt;const p=Math.min(transitionTime/Math.max(state.transition/2,.05),1),e=ease(p);if(currentMesh)currentMesh.material.uniforms.uAlpha.value=e;
   if(p>=1){transitionState='idle';if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f,{silent:true}),0);}}
  }
+ if(typeTransition){
+  typeTransition.time+=dt;
+  const p=Math.min(typeTransition.time/Math.max(.05,typeTransition.duration),1),e=ease(p);
+  if(typeTransition.kind==='cube-to-stl'){
+   const outP=Math.min(1,p/.48),inP=p<.32?0:Math.min(1,(p-.32)/.68);
+   imageCubeGroup.position.lerpVectors(typeTransition.cubeFrom,typeTransition.cubeTo,ease(outP));
+   setCubeVisualAlpha(1-ease(outP));
+   const m=typeTransition.stl;
+   m.position.lerpVectors(typeTransition.stlFrom,typeTransition.stlTo,ease(inP));
+   const s=.82+(1-.82)*ease(inP);m.scale.copy(typeTransition.stlTargetScale).multiplyScalar(s);
+   m.material.uniforms.uAlpha.value=ease(inP);
+   if(p>=1){
+    hideImageCube();setCubeVisualAlpha(1);
+    currentMesh=m;oldMesh=null;transitionState='idle';currentContentType='stl';
+    m.position.set(0,0,0);m.scale.copy(typeTransition.stlTargetScale);m.material.uniforms.uAlpha.value=1;
+    showLabel(typeTransition.fileName);$('info').textContent='✅ '+typeTransition.fileName;
+    typeTransition=null;syncMaterials();
+   }
+  }else if(typeTransition.kind==='stl-to-cube'){
+   const outP=Math.min(1,p/.48),inP=p<.32?0:Math.min(1,(p-.32)/.68);
+   const m=typeTransition.stl;
+   const stlBack=sceneBackPosition(280);
+   m.position.lerpVectors(typeTransition.stlStartPos,stlBack,ease(outP));
+   const ss=1-.18*ease(outP);m.scale.copy(typeTransition.stlStartScale).multiplyScalar(ss);
+   m.material.uniforms.uAlpha.value=1-ease(outP);
+   imageCubeGroup.position.lerpVectors(typeTransition.cubeFrom,typeTransition.cubeTo,ease(inP));
+   imageCubeGroup.scale.setScalar(state.objectScale*(.82+.18*ease(inP)));
+   setCubeVisualAlpha(ease(inP));
+   if(p>=1){
+    disposeModel(m);currentMesh=null;oldMesh=null;transitionState='idle';currentContentType='image';
+    imageCubeGroup.position.copy(typeTransition.cubeTo);imageCubeGroup.scale.setScalar(state.objectScale);setCubeVisualAlpha(1);
+    showLabel(typeTransition.fileName);$('info').textContent='🖼 '+typeTransition.fileName;
+    typeTransition=null;
+   }
+  }
+ }
  if(cubeTransition){
   cubeTransition.time+=dt;
   const p=Math.min(cubeTransition.time/Math.max(.05,cubeTransition.duration),1),e=ease(p);
@@ -503,7 +585,7 @@ function animate(){
   }
  }
  if(label){labelHold+=dt;if(labelHold<5)labelAlpha+=(1-labelAlpha)*Math.min(dt*3,1);else labelAlpha+=(0-labelAlpha)*Math.min(dt*2,1);label.material.opacity=labelAlpha;label.position.y=-58+Math.sin(t*1.5)*2;}
- if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'){
+ if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'&&!typeTransition){
   if(currentContentType==='image'&&imageCubeGroup.visible){
    playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';
    const nextIndex=(playlistIndex+1)%playlist.length,nextItem=playlist[nextIndex];
