@@ -584,7 +584,25 @@ function animate(){
    }
   }
  }
- if(label){labelHold+=dt;if(labelHold<5)labelAlpha+=(1-labelAlpha)*Math.min(dt*3,1);else labelAlpha+=(0-labelAlpha)*Math.min(dt*2,1);label.material.opacity=labelAlpha;label.position.y=-58+Math.sin(t*1.5)*2;}
+ if(label){
+  labelHold+=dt;
+  if(labelHold<5)labelAlpha+=(1-labelAlpha)*Math.min(dt*3,1);else labelAlpha+=(0-labelAlpha)*Math.min(dt*2,1);
+  label.material.opacity=labelAlpha;
+  if(currentContentType==='image'&&imageCubeGroup.visible){
+   const toCam=new THREE.Vector3().subVectors(camera.position,imageCubeGroup.position).normalize();
+   const camRight=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0).normalize();
+   const camUp=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1).normalize();
+   label.position.copy(imageCubeGroup.position)
+    .addScaledVector(toCam,6)
+    .addScaledVector(camUp,-58+Math.sin(t*1.5)*2);
+   label.quaternion.copy(camera.quaternion);
+   label.scale.set(135,29,1);
+  }else{
+   label.position.set(0,-58+Math.sin(t*1.5)*2,0);
+   label.quaternion.copy(camera.quaternion);
+   label.scale.set(160,34,1);
+  }
+ }
  if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'&&!typeTransition){
   if(currentContentType==='image'&&imageCubeGroup.visible){
    playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';
