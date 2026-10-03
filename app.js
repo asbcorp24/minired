@@ -170,7 +170,7 @@ function applyScenePresetByName(name){
  cubeEdges.material.color.set(p.edge);glassMaterial.color.set(p.glass);state.cubeGlassOpacity=p.glassOpacity;glassMaterial.opacity=p.glassOpacity;
  const ec=new THREE.Color(p.env);crystals.forEach((x,i)=>x.material.color.copy(ec).multiplyScalar(.65+(i%3)*.15));if(particles)particles.material.color.copy(ec);rings.forEach((x,i)=>x.material.color.copy(ec).offsetHSL(i*.1,0,0));
  floor.visible=p.floor;grid.visible=p.grid;particleGroup.visible=p.particles;ringGroup.visible=p.rings;state.particles=p.particles;state.rings=p.rings;
- if($('bgColorPicker'))$('bgColorPicker').value=p.bg;if($('colorPicker'))$('colorPicker').value=p.model;if($('cubeEdgeColor'))$('cubeEdgeColor').value=p.edge;if($('cubeGlassColor'))$('cubeGlassColor').value=p.glass;
+ if($('bgColorPicker'))$('bgColorPicker').value=p.bg;if($('colorPicker'))$('colorPicker').value=p.model;if($('cubeEdgeColor'))$('cubeEdgeColor').value=p.edge;if($('cubeGlassColor'))$('cubeGlassColor').value=p.glass;if($('envColorPicker'))$('envColorPicker').value=p.env;
  if($('cubeGlassOpacity')){$('cubeGlassOpacity').value=p.glassOpacity;setText('cubeGlassValue',p.glassOpacity.toFixed(2));}
  if($('showFloor'))$('showFloor').checked=p.floor;if($('gridToggle'))$('gridToggle').checked=p.grid;if($('particlesToggle'))$('particlesToggle').checked=p.particles;if($('ringsToggle'))$('ringsToggle').checked=p.rings;
  if($('bloomStrength'))$('bloomStrength').value=p.bloom;if($('scenePreset'))$('scenePreset').value=name;
@@ -1080,9 +1080,9 @@ $('gradeContrast').oninput=e=>{gradingPass.uniforms.contrast.value=+e.target.val
 $('gradeSaturation').oninput=e=>{gradingPass.uniforms.saturation.value=+e.target.value;setText('gradeSaturationValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
 $('gradeTemperature').oninput=e=>{gradingPass.uniforms.temperature.value=+e.target.value;setText('gradeTemperatureValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
 $('gradeTint').oninput=e=>{gradingPass.uniforms.tint.value=+e.target.value;setText('gradeTintValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
-$('gradePreset').onchange=e=>applyGradePreset(e.target.value);
+const onGradePreset=e=>applyGradePreset(e.target.value);$('gradePreset').onchange=onGradePreset;$('gradePreset').oninput=onGradePreset;
 $('applyScenePreset').onclick=()=>applyScenePresetByName($('scenePreset').value);
-$('scenePreset').onchange=e=>{state.scenePreset=e.target.value;};
+const onScenePreset=e=>{state.scenePreset=e.target.value;};$('scenePreset').onchange=onScenePreset;$('scenePreset').oninput=onScenePreset;
 $('saveCustomPreset').onclick=()=>{customScenePreset={bg:'#'+scene.background.getHexString(),fog:'#'+scene.fog.color.getHexString(),bloom:bloomPass.strength,model:'#'+baseUniforms.color.getHexString(),edge:$('cubeEdgeColor').value,env:$('envColorPicker').value,floor:floor.visible,grid:grid.visible,particles:particleGroup.visible,rings:ringGroup.visible,grade:state.gradePreset,glass:$('cubeGlassColor').value,glassOpacity:state.cubeGlassOpacity};state.scenePreset='custom';$('scenePreset').value='custom';saveSoon();$('info').textContent='💾 Custom scene preset сохранён';};
 
 $('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();saveSoon();};
@@ -1110,7 +1110,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 $('previewBtn').onclick=()=>{document.body.classList.toggle('preview-mode');};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.classList.remove('preview-mode');});
 $('saveProjectBtn').onclick=()=>{
- const payload={version:2,state:{...state},settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
+ const payload={version:3,state:{...state},customScenePreset,settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=u;a.download='minired-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
@@ -1119,6 +1119,7 @@ $('projectInput').onchange=async e=>{
  try{
   const p=JSON.parse(await f.text());
   Object.assign(state,p.state||{});
+  if(p.customScenePreset)customScenePreset=p.customScenePreset;
   if(p.settings)applySettingsSnapshot(p.settings);
   [...textObjects].forEach(disposeTextObject);
   const restoredTexts=[];for(const tp of (p.texts||[]))restoredTexts.push(await addTextObject(tp,false));
@@ -1133,7 +1134,7 @@ $('resetCinemaBtn').onclick=()=>{
  glassMaterial.opacity=state.cubeGlassOpacity;saveSoon();
 };
 function saveSettingsSnapshot(){
- const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval'];
+ const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset'];
  const o={};ids.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
 }
 function applySettingsSnapshot(o){Object.entries(o||{}).forEach(([id,v])=>{const e=$(id);if(!e)return;if(e.type==='checkbox'){e.checked=!!v;e.dispatchEvent(new Event('change'));}else{e.value=v;e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});}
@@ -1145,10 +1146,12 @@ function saveSettings(){
 }
 function restoreSettings(){
  let d;try{d=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}if(!d)return;
- Object.keys(d).forEach(id=>{if(id==='axis'||id==='customScenePreset'||!$(id))return;const e=$(id);if(e.type==='checkbox'){e.checked=!!d[id];e.dispatchEvent(new Event('change'));}else{e.value=d[id];e.dispatchEvent(new Event('input'));}});
+ Object.keys(d).forEach(id=>{if(id==='axis'||id==='customScenePreset'||!$(id))return;const e=$(id);if(e.type==='checkbox'){e.checked=!!d[id];e.dispatchEvent(new Event('change'));}else{e.value=d[id];e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});
  if(['x','y','z'].includes(d.axis)){state.axis=d.axis;document.querySelectorAll('.axis').forEach(b=>b.classList.toggle('active',b.dataset.axis===state.axis));}if(d.customScenePreset)customScenePreset=d.customScenePreset;
 }
 restoreSettings();
+if($('scenePreset')&&$('scenePreset').value!=='custom'&&scenePresets[$('scenePreset').value])applyScenePresetByName($('scenePreset').value);
+else if($('gradePreset'))applyGradePreset($('gradePreset').value||'none');
 state.cubeSpinSpeed=+$('cubeSpinSpeed').value||.3;
 setText('cubeSpinSpeedValue',state.cubeSpinSpeed.toFixed(2));
 setObjectScale(+$('objectScale').value||1);
