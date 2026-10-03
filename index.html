@@ -19,8 +19,10 @@ label{display:flex;gap:7px;align-items:center;margin:5px 0;font-size:12px}input[
 #info{left:18px;bottom:18px;padding:9px 12px;font-size:12px;color:#ccc}#drag{inset:0;display:none;align-items:center;justify-content:center;font-size:30px;font-weight:700;background:rgba(233,69,96,.86);z-index:100}#drag.active{display:flex}
 #loading{inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.82);z-index:110}#loading.active{display:flex}
 #rec{top:18px;left:50%;transform:translateX(-50%);padding:7px 13px;background:#c00;display:none}#rec.active{display:block}#recordBtn.recording{background:#d00}
-#fileInput,#audioInput{display:none}#audioStatus{font-size:11px;color:#888;word-break:break-all}.playing{color:#0f8!important}
+#fileInput,#audioInput,#projectInput{display:none}#audioStatus{font-size:11px;color:#888;word-break:break-all}.playing{color:#0f8!important}
 #settingsToggle{display:none;position:fixed;right:14px;bottom:14px;z-index:50;width:52px;height:52px;border-radius:50%;border:1px solid #555;background:#15152b;color:#fff;font-size:22px}
+body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,body.preview-mode #info,body.preview-mode #settingsToggle{display:none!important}
+.pl-item[draggable="true"]{cursor:grab}.pl-item.dragging{opacity:.35}.pl-meta{font-size:10px;color:#7dd3fc;white-space:nowrap}
 @media(max-width:900px){#settingsToggle{display:block}#controls{display:none;top:auto;left:10px;right:10px;bottom:74px;width:auto;max-height:70vh}#controls.open{display:block}#ui{top:10px;left:10px}.btn{padding:8px 10px;font-size:12px}#playlist{top:auto;bottom:10px;left:10px;right:74px;transform:none;width:auto}#info{display:none}}
 </style>
 </head>
@@ -28,6 +30,9 @@ label{display:flex;gap:7px;align-items:center;margin:5px 0;font-size:12px}input[
 <div id="ui" class="panel">
 <label class="btn" for="fileInput">📂 Добавить STL / картинки</label><input id="fileInput" type="file" accept=".stl,image/jpeg,image/png,image/webp,image/gif" multiple>
 <div class="btn" id="playBtn">▶️ Пролёт камеры</div><div class="btn" id="recordBtn">⏺ Запись клипа</div><div class="btn" id="resetBtn">🔄 Сброс камеры</div>
+<div class="btn" id="previewBtn">🎬 Preview</div>
+<div class="row"><div class="mini" id="saveProjectBtn">💾 Проект</div><label class="mini" for="projectInput">📁 Открыть</label></div>
+<input id="projectInput" type="file" accept=".json,application/json">
 </div>
 
 <div id="playlist" class="panel"><div class="pl-head"><b>📋 Плейлист</b><span id="plCount">0</span></div><div id="plList" class="pl-list"></div>
@@ -54,6 +59,38 @@ label{display:flex;gap:7px;align-items:center;margin:5px 0;font-size:12px}input[
 <select id="imageFitMode">
 <option value="contain">Contain — целиком</option>
 <option value="cover">Cover — заполнить грань</option>
+</select>
+<div style="margin-top:6px">Переход картинок</div>
+<select id="cubeTransitionStyle">
+<option value="fly-turn">Улёт + поворот</option>
+<option value="dissolve">Растворение</option>
+<option value="particles">Частицы</option>
+<option value="holo">Голографический скан</option>
+</select>
+<div>Показ у экрана <span id="cubeHoldValue" class="val">60</span>%</div>
+<input id="cubeHoldPercent" type="range" min="35" max="80" step="1" value="60">
+<div>Дистанция подлёта <span id="cubeNearValue" class="val">58</span></div>
+<input id="cubeNearDistance" type="range" min="25" max="110" step="1" value="58">
+<div>Дистанция ухода <span id="cubeFarValue" class="val">280</span></div>
+<input id="cubeFarDistance" type="range" min="140" max="600" step="10" value="280">
+<div>Покачивание <span id="cubeSwayValue" class="val">0.40</span></div>
+<input id="cubeSway" type="range" min="0" max="2" step=".05" value=".40">
+<div>Прозрачность стекла <span id="cubeGlassValue" class="val">0.13</span></div>
+<input id="cubeGlassOpacity" type="range" min="0" max=".5" step=".01" value=".13">
+<div>Яркость рёбер <span id="cubeEdgeValue" class="val">1.00</span></div>
+<input id="cubeEdgeIntensity" type="range" min=".1" max="3" step=".05" value="1">
+<label><input id="cubeBassEdges" type="checkbox" checked>Рёбра реагируют на бас</label>
+<label><input id="cubeEdgeSweep" type="checkbox" checked>Бегущий свет по рёбрам</label>
+<label><input id="cameraDolly" type="checkbox" checked>Camera dolly при показе</label>
+<label><input id="autoPalette" type="checkbox" checked>Цвет сцены от изображения</label>
+<div>Цвет стекла</div><input id="cubeGlassColor" type="color" value="#66ccff">
+<div>Цвет неона</div><input id="cubeEdgeColor" type="color" value="#00ffff">
+<div style="margin-top:6px">Куб ↔ STL</div>
+<select id="typeTransitionStyle">
+<option value="fly-dissolve">Улёт + растворение</option>
+<option value="dissolve">Растворение</option>
+<option value="particles">Частицы</option>
+<option value="holo">Голографический скан</option>
 </select>
 
 <div class="section">Приближение объекта</div>
@@ -90,6 +127,9 @@ label{display:flex;gap:7px;align-items:center;margin:5px 0;font-size:12px}input[
 <option value="assemble">Сборка из точек</option>
 </select>
 <div>Длительность <span id="transitionDurationValue" class="val">1.5</span>с</div><input id="transitionDuration" type="range" min=".5" max="5" step=".1" value="1.5">
+<label><input id="preloadToggle" type="checkbox" checked>Preload следующего элемента</label>
+<label><input id="parallaxToggle" type="checkbox" checked>Параллакс изображения</label>
+<div class="mini" id="resetCinemaBtn" style="margin-top:6px">Сбросить кино-настройки</div>
 </div>
 
 <div id="info" class="panel">Добавьте STL или изображения</div><div id="drag" class="panel">Отпустите STL, изображения или аудио</div><div id="loading" class="panel">🎬 ПОДГОТОВКА СЦЕНЫ...</div><div id="rec" class="panel">REC <span id="recTime">00:00</span></div>
