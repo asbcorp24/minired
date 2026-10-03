@@ -131,7 +131,7 @@ function faceQuaternionForStep(step){
  return q;
 }
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom'};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false};
 
 const gradePresets={
  none:{contrast:1,saturation:1,temperature:0,tint:0,exposure:1.05},
@@ -389,6 +389,98 @@ const rings=[];
  const ring=new THREE.Points(g,m);ring.rotation.x=tilt;ring.rotation.z=tilt*.5;ring.userData={base:ring.rotation.z,speed};ringGroup.add(ring);rings.push(ring);
 });
 
+const technicalGroup=new THREE.Group();technicalGroup.visible=false;scene.add(technicalGroup);
+let technicalAxesHelper=null,technicalGridHelper=null;
+function clearTechnicalOverlay(){
+ while(technicalGroup.children.length){
+  const o=technicalGroup.children.pop();
+  o.geometry?.dispose?.();o.material?.dispose?.();
+  if(o.material?.map)o.material.map.dispose();
+ }
+ technicalAxesHelper=null;technicalGridHelper=null;
+}
+function unitScale(){
+ const u=$('technicalUnits')?.value||'mm';
+ return u==='m'?.001:u==='cm'?.1:1;
+}
+function unitLabel(){
+ const u=$('technicalUnits')?.value||'mm';
+ return u==='raw'?'ед.':u;
+}
+function makeTechLabel(text,pos,color=0xbfefff){
+ const c=document.createElement('canvas');c.width=512;c.height=128;const x=c.getContext('2d');
+ x.clearRect(0,0,512,128);x.font='700 46px Segoe UI,Arial';x.textAlign='center';x.textBaseline='middle';
+ x.strokeStyle='rgba(0,0,0,.85)';x.lineWidth=8;x.strokeText(text,256,64);x.fillStyle='#dff8ff';x.fillText(text,256,64);
+ const t=new THREE.CanvasTexture(c),m=new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}),sp=new THREE.Sprite(m);
+ sp.position.copy(pos);sp.scale.set(45,11,1);technicalGroup.add(sp);return sp;
+}
+function lineBetween(a,b,color=0x7dd3fc){
+ const g=new THREE.BufferGeometry().setFromPoints([a,b]);
+ const m=new THREE.LineBasicMaterial({color,transparent:true,opacity:.9,depthTest:false});
+ const l=new THREE.Line(g,m);technicalGroup.add(l);return l;
+}
+function addDimLine(a,b,axisText,valueText,offsetDir){
+ const off=offsetDir.clone();
+ const a2=a.clone().add(off),b2=b.clone().add(off);
+ lineBetween(a,a2,0x4aa3ff);lineBetween(b,b2,0x4aa3ff);lineBetween(a2,b2,0xbfefff);
+ const tick=2.8;
+ const dir=new THREE.Vector3().subVectors(b2,a2).normalize();
+ const n=new THREE.Vector3(-dir.y,dir.x,dir.z).normalize().multiplyScalar(tick);
+ lineBetween(a2.clone().sub(n),a2.clone().add(n),0xffffff);lineBetween(b2.clone().sub(n),b2.clone().add(n),0xffffff);
+ if($('technicalLabels')?.checked)makeTechLabel(axisText+' '+valueText,a2.clone().lerp(b2,.5).add(new THREE.Vector3(0,4,0)));
+}
+function updateTechnicalOverlay(mesh=currentMesh){
+ clearTechnicalOverlay();
+ if(!mesh||!state.technicalMode){technicalGroup.visible=false;return;}
+ technicalGroup.visible=true;
+ mesh.geometry.computeBoundingBox();
+ const bb=mesh.geometry.boundingBox.clone();
+ const sc=mesh.scale.clone();
+ const min=bb.min.clone().multiply(sc),max=bb.max.clone().multiply(sc),size=new THREE.Vector3().subVectors(max,min);
+ const offset=Math.max(size.x,size.y,size.z)*.12+6;
+ if($('technicalDimensions')?.checked){
+  const mul=unitScale(),ul=unitLabel();
+  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(max.x,min.y,min.z),'X',(size.x*mul).toFixed(1)+' '+ul,new THREE.Vector3(0,-offset,0));
+  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(min.x,max.y,min.z),'Y',(size.y*mul).toFixed(1)+' '+ul,new THREE.Vector3(-offset,0,0));
+  addDimLine(new THREE.Vector3(min.x,min.y,min.z),new THREE.Vector3(min.x,min.y,max.z),'Z',(size.z*mul).toFixed(1)+' '+ul,new THREE.Vector3(-offset*.65,-offset*.65,0));
+ }
+ if($('technicalAxes')?.checked){
+  technicalAxesHelper=new THREE.AxesHelper(Math.max(size.x,size.y,size.z)*.7);technicalAxesHelper.position.set(min.x,min.y,min.z);technicalGroup.add(technicalAxesHelper);
+ }
+ if($('technicalGrid')?.checked){
+  const gs=Math.max(size.x,size.z)*1.8,div=20;
+  technicalGridHelper=new THREE.GridHelper(gs,div,0x55aaff,0x224466);technicalGridHelper.position.y=min.y-offset*.15;
+  technicalGridHelper.material.transparent=true;technicalGridHelper.material.opacity=.55;technicalGroup.add(technicalGridHelper);
+ }
+ if($('technicalWireframe')?.checked){
+  state.wire=true;if($('wireframeToggle'))$('wireframeToggle').checked=true;syncMaterials();
+ }
+}
+function modelBounds(mesh=currentMesh){
+ if(!mesh)return null;mesh.geometry.computeBoundingBox();
+ const bb=mesh.geometry.boundingBox.clone(),min=bb.min.clone().multiply(mesh.scale),max=bb.max.clone().multiply(mesh.scale);
+ const size=new THREE.Vector3().subVectors(max,min),center=new THREE.Vector3().addVectors(min,max).multiplyScalar(.5);
+ return {min,max,size,center,maxDim:Math.max(size.x,size.y,size.z)};
+}
+function chooseAutoView(size){
+ const dims=[['x',size.x],['y',size.y],['z',size.z]].sort((a,b)=>b[1]-a[1]);
+ if(dims[0][0]==='y')return 'hero';
+ if(Math.abs(size.x-size.z)/Math.max(size.x,size.z)<.18)return 'isometric';
+ return size.x>=size.z?'hero':'isometric';
+}
+function applyCameraView(mode='auto',mesh=currentMesh){
+ const b=modelBounds(mesh);if(!b)return;
+ if(mode==='auto')mode=chooseAutoView(b.size);
+ const d=Math.max(80,b.maxDim*2.15),c=b.center;
+ let pos;
+ if(mode==='front')pos=new THREE.Vector3(c.x,c.y,c.z+d);
+ else if(mode==='top')pos=new THREE.Vector3(c.x,c.y+d,c.z+.001);
+ else if(mode==='technical')pos=new THREE.Vector3(c.x+d*.95,c.y+d*.72,c.z+d*.95);
+ else if(mode==='isometric')pos=new THREE.Vector3(c.x+d*.78,c.y+d*.62,c.z+d*.78);
+ else pos=new THREE.Vector3(c.x+d*.92,c.y+d*.55,c.z+d*.68);
+ fly=false;controls.enabled=true;camera.position.copy(pos);controls.target.copy(c);camera.lookAt(c);controls.update();
+ bokehPass.uniforms.focus.value=camera.position.distanceTo(c);
+}
 let currentMesh=null,oldMesh=null,transitionState='idle',transitionTime=0,pending=null,transitionFX=null;
 const loader=new STLLoader();
 function geometryFromBuffer(buf){
@@ -406,7 +498,7 @@ function setObjectScale(value){
  state.objectScale=Math.max(.2,Math.min(3,+value||1));
  if($('objectScale'))$('objectScale').value=state.objectScale;
  if($('objectScaleValue'))$('objectScaleValue').textContent=state.objectScale.toFixed(2);
- applyObjectScale();
+ applyObjectScale();if(state.technicalMode)updateTechnicalOverlay(currentMesh);
  saveSoon();
 }
 
@@ -625,7 +717,7 @@ async function showImageItem(file,{silent=true}={}){
 function showPlaylistItem(item){
  if(!item)return;
  if(item.type==='text'){
-  hideImageCube();disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';
+  technicalGroup.visible=false;hideImageCube();disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';
   currentContentType='text';hideLabel();
   const obj=textObjects.find(o=>o.id===item.textId);
   if(obj){
@@ -633,7 +725,7 @@ function showPlaylistItem(item){
    $('info').textContent='✦ 3D-текст: '+obj.params.text;
   }
  }else if(item.type==='image'){
-  hideAllText();state.cubeTransitionStyle=item.transition||state.cubeTransitionStyle;showImageItem(item.file,{silent:true});
+  technicalGroup.visible=false;hideAllText();state.cubeTransitionStyle=item.transition||state.cubeTransitionStyle;showImageItem(item.file,{silent:true});
  }else{
   hideAllText();state.transitionMode=item.transition||state.transitionMode;showSTLItem(item.file);
  }
@@ -668,7 +760,7 @@ function loadSTL(file,{silent=false,fromCube=false}={}){
     if(currentMesh){oldMesh=currentMesh;currentMesh=next;transitionState='cross';beginTransitionFX(state.transitionMode);}
     else{currentMesh=next;transitionState='in';}
     currentContentType='stl';
-    transitionTime=0;showLabel(file.name);
+    transitionTime=0;if(state.autoCameraEach)setTimeout(()=>applyCameraView($('cameraPreset')?.value||'auto',next),0);if(state.technicalMode)setTimeout(()=>updateTechnicalOverlay(next),0);showLabel(file.name);
     $('info').textContent='✅ '+file.name+' | '+Math.round(next.geometry.attributes.position.count/3).toLocaleString()+' треуг.';
     syncMaterials();
    }
@@ -825,7 +917,7 @@ function animate(){
    m.material.uniforms.uAlpha.value=style==='holo'?ease(inP)*(.65+.35*Math.abs(Math.cos(p*Math.PI*7))):ease(inP);
    if(p>=1){
     hideImageCube();setCubeVisualAlpha(1);
-    currentMesh=m;oldMesh=null;transitionState='idle';currentContentType='stl';
+    currentMesh=m;oldMesh=null;transitionState='idle';currentContentType='stl';if(state.autoCameraEach)setTimeout(()=>applyCameraView($('cameraPreset')?.value||'auto',m),0);if(state.technicalMode)setTimeout(()=>updateTechnicalOverlay(m),0);
     m.position.set(0,0,0);m.scale.copy(typeTransition.stlTargetScale);m.material.uniforms.uAlpha.value=1;
     showLabel(typeTransition.fileName);$('info').textContent='✅ '+typeTransition.fileName;
     typeTransition=null;syncMaterials();
@@ -1037,7 +1129,7 @@ $('zoomOutBtn').onclick=()=>setObjectScale(state.objectScale-.1);
 $('zoomResetBtn').onclick=()=>setObjectScale(1);
 $('reverseBtn').onclick=()=>{$('speedSlider').value=-state.speed;$('speedSlider').dispatchEvent(new Event('input'));};
 $('pauseRotBtn').onclick=()=>{state.rotPaused=!state.rotPaused;$('pauseRotBtn').textContent=state.rotPaused?'▶️':'⏸';};
-document.querySelectorAll('.orient').forEach(b=>b.onclick=()=>{if(currentMesh)currentMesh.rotation[b.dataset.axis]+=THREE.MathUtils.degToRad(+b.dataset.deg);});
+document.querySelectorAll('.orient').forEach(b=>b.onclick=()=>{if(currentMesh){currentMesh.rotation[b.dataset.axis]+=THREE.MathUtils.degToRad(+b.dataset.deg);if(state.technicalMode)updateTechnicalOverlay(currentMesh);}});
 $('orientationResetBtn').onclick=()=>{if(currentMesh)currentMesh.rotation.set(0,0,0);};
 
 $('addTextBtn').onclick=()=>addTextObject();
@@ -1060,6 +1152,21 @@ $('textX').oninput=e=>{setText('textXValue',Math.round(+e.target.value));updateA
 $('textY').oninput=e=>{setText('textYValue',Math.round(+e.target.value));updateActiveText(false);};
 $('textZ').oninput=e=>{setText('textZValue',Math.round(+e.target.value));updateActiveText(false);};
 $('textFaceCamera').onchange=()=>updateActiveText(false);
+
+$('applyCameraPreset').onclick=()=>applyCameraView($('cameraPreset').value);
+$('autoCameraEach').onclick=()=>{state.autoCameraEach=!state.autoCameraEach;$('autoCameraEach').classList.toggle('active',state.autoCameraEach);$('autoCameraEach').textContent=state.autoCameraEach?'✓ Auto для каждой STL':'Auto для каждой STL';saveSoon();};
+$('technicalMode').onchange=e=>{
+ state.technicalMode=e.target.checked;
+ if(state.technicalMode){
+  applyScenePresetByName('blueprint');
+  if(currentMesh)updateTechnicalOverlay(currentMesh);
+ }else technicalGroup.visible=false;
+ saveSoon();
+};
+['technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels'].forEach(id=>$(id).onchange=()=>{if(state.technicalMode)updateTechnicalOverlay(currentMesh);saveSoon();});
+$('technicalUnits').onchange=()=>{if(state.technicalMode)updateTechnicalOverlay(currentMesh);saveSoon();};
+$('refreshTechnical').onclick=()=>updateTechnicalOverlay(currentMesh);
+$('clearTechnical').onclick=()=>{state.technicalMode=false;$('technicalMode').checked=false;technicalGroup.visible=false;saveSoon();};
 
 $('fxChromatic').onchange=e=>{chromaPass.enabled=e.target.checked;saveSoon();};
 $('fxChromaticAmount').oninput=e=>{chromaPass.uniforms.amount.value=+e.target.value;setText('fxChromaticValue',(+e.target.value).toFixed(4));saveSoon();};
@@ -1134,7 +1241,7 @@ $('resetCinemaBtn').onclick=()=>{
  glassMaterial.opacity=state.cubeGlassOpacity;saveSoon();
 };
 function saveSettingsSnapshot(){
- const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset'];
+ const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits'];
  const o={};ids.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
 }
 function applySettingsSnapshot(o){Object.entries(o||{}).forEach(([id,v])=>{const e=$(id);if(!e)return;if(e.type==='checkbox'){e.checked=!!v;e.dispatchEvent(new Event('change'));}else{e.value=v;e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});}
@@ -1142,12 +1249,12 @@ const KEY='stl-cinematic-settings-v2';let saveTimer;
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSettings,100);}
 function saveSettings(){
  const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval','cubeSpinSpeed','objectScale','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset'];
- const d={axis:state.axis,customScenePreset};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
+ const d={axis:state.axis,customScenePreset,autoCameraEach:state.autoCameraEach};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
 }
 function restoreSettings(){
  let d;try{d=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}if(!d)return;
- Object.keys(d).forEach(id=>{if(id==='axis'||id==='customScenePreset'||!$(id))return;const e=$(id);if(e.type==='checkbox'){e.checked=!!d[id];e.dispatchEvent(new Event('change'));}else{e.value=d[id];e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});
- if(['x','y','z'].includes(d.axis)){state.axis=d.axis;document.querySelectorAll('.axis').forEach(b=>b.classList.toggle('active',b.dataset.axis===state.axis));}if(d.customScenePreset)customScenePreset=d.customScenePreset;
+ Object.keys(d).forEach(id=>{if(id==='axis'||id==='customScenePreset'||id==='autoCameraEach'||!$(id))return;const e=$(id);if(e.type==='checkbox'){e.checked=!!d[id];e.dispatchEvent(new Event('change'));}else{e.value=d[id];e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});
+ if(['x','y','z'].includes(d.axis)){state.axis=d.axis;document.querySelectorAll('.axis').forEach(b=>b.classList.toggle('active',b.dataset.axis===state.axis));}if(d.customScenePreset)customScenePreset=d.customScenePreset;if(typeof d.autoCameraEach==='boolean'){state.autoCameraEach=d.autoCameraEach;if($('autoCameraEach')){$('autoCameraEach').classList.toggle('active',state.autoCameraEach);$('autoCameraEach').textContent=state.autoCameraEach?'✓ Auto для каждой STL':'Auto для каждой STL';}}
 }
 restoreSettings();
 if($('scenePreset')&&$('scenePreset').value!=='custom'&&scenePresets[$('scenePreset').value])applyScenePresetByName($('scenePreset').value);
