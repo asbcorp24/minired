@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>STL Cinematic</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}canvas{display:block}
+.panel{position:fixed;z-index:20;background:rgba(15,18,35,.78);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.12);border-radius:14px}
+#ui{top:18px;left:18px;display:flex;flex-direction:column;gap:8px}
+.btn,.mini,.axis,.orient{cursor:pointer;user-select:none;border:1px solid rgba(255,255,255,.15);background:rgba(20,20,40,.72);color:#fff;border-radius:9px;text-align:center;transition:.2s}
+.btn{padding:10px 16px}.mini,.axis,.orient{padding:6px 8px;font-size:12px}.btn:hover,.mini:hover,.axis:hover,.orient:hover,.active{background:#e94560;border-color:#e94560}
+#controls{top:18px;right:18px;width:270px;max-height:calc(100vh - 36px);overflow:auto;padding:14px}#controls::-webkit-scrollbar{width:5px}#controls::-webkit-scrollbar-thumb{background:#e94560}
+.section{margin-top:12px;color:#e94560;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px}.section:first-child{margin-top:0}
+label{display:flex;gap:7px;align-items:center;margin:5px 0;font-size:12px}input[type=range],input[type=color]{width:100%;accent-color:#e94560}input[type=color]{height:30px;border:0;background:none}
+.row{display:flex;gap:6px}.row>*{flex:1}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.val{font:11px monospace;color:#e94560}
+#playlist{top:18px;left:50%;transform:translateX(-50%);width:380px;padding:10px;display:none}.pl-head{display:flex;justify-content:space-between}.pl-list{max-height:130px;overflow:auto;margin:7px 0}.pl-item{display:flex;gap:7px;padding:5px;border-radius:6px;font-size:11px;color:#aaa;cursor:pointer}.pl-item.active{background:rgba(233,69,96,.25);color:#fff}.pl-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.remove{color:#f66}
+#info{left:18px;bottom:18px;padding:9px 12px;font-size:12px;color:#ccc}#drag{inset:0;display:none;align-items:center;justify-content:center;font-size:30px;font-weight:700;background:rgba(233,69,96,.86);z-index:100}#drag.active{display:flex}
+#loading{inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.82);z-index:110}#loading.active{display:flex}
+#rec{top:18px;left:50%;transform:translateX(-50%);padding:7px 13px;background:#c00;display:none}#rec.active{display:block}#recordBtn.recording{background:#d00}
+#fileInput,#audioInput{display:none}#audioStatus{font-size:11px;color:#888;word-break:break-all}.playing{color:#0f8!important}
+#settingsToggle{display:none;position:fixed;right:14px;bottom:14px;z-index:50;width:52px;height:52px;border-radius:50%;border:1px solid #555;background:#15152b;color:#fff;font-size:22px}
+@media(max-width:900px){#settingsToggle{display:block}#controls{display:none;top:auto;left:10px;right:10px;bottom:74px;width:auto;max-height:70vh}#controls.open{display:block}#ui{top:10px;left:10px}.btn{padding:8px 10px;font-size:12px}#playlist{top:auto;bottom:10px;left:10px;right:74px;transform:none;width:auto}#info{display:none}}
+</style>
+</head>
+<body>
+<div id="ui" class="panel">
+<label class="btn" for="fileInput">📂 Добавить STL</label><input id="fileInput" type="file" accept=".stl" multiple>
+<div class="btn" id="playBtn">▶️ Пролёт камеры</div><div class="btn" id="recordBtn">⏺ Запись клипа</div><div class="btn" id="resetBtn">🔄 Сброс камеры</div>
+</div>
+
+<div id="playlist" class="panel"><div class="pl-head"><b>📋 Плейлист</b><span id="plCount">0</span></div><div id="plList" class="pl-list"></div>
+<div class="row"><div class="mini" id="plPlayBtn">⏸ Пауза</div><div class="mini" id="plNextBtn">⏭ Далее</div><div class="mini" id="plClearBtn">🗑 Очистить</div></div>
+<div style="font-size:11px;margin-top:6px">Следующая через <span id="plTimer" class="val">30.0с</span></div><input id="plInterval" type="range" min="5" max="120" value="30"><span id="plIntervalValue" class="val">30с</span></div>
+
+<div id="controls" class="panel">
+<div class="section">Модель</div>
+<div>Прозрачность <span id="opacityValue" class="val">0.35</span></div><input id="opacitySlider" type="range" min=".05" max="1" step=".01" value=".35">
+<label><input id="fresnelToggle" type="checkbox" checked>Fresnel</label>
+<div>Fresnel power <span id="fresnelPowerValue" class="val">2.5</span></div><input id="fresnelPower" type="range" min=".5" max="6" step=".1" value="2.5">
+<div>Интенсивность <span id="fresnelIntensityValue" class="val">1.5</span></div><input id="fresnelIntensity" type="range" min="0" max="5" step=".1" value="1.5">
+<input id="fresnelColorPicker" type="color" value="#00ffff">
+
+<div class="section">Вращение</div><label><input id="autoRotateToggle" type="checkbox" checked>Автовращение</label>
+<div class="row"><div class="axis" data-axis="x">X</div><div class="axis active" data-axis="y">Y</div><div class="axis" data-axis="z">Z</div></div>
+<div>Скорость <span id="speedValue" class="val">1.0</span>x <span id="directionLabel">↻</span></div><input id="speedSlider" type="range" min="-3" max="3" step=".1" value="1">
+<div class="row"><div class="mini" id="reverseBtn">🔄 Реверс</div><div class="mini" id="pauseRotBtn">⏸</div></div>
+
+<div class="section">Ориентация STL</div><div class="grid">
+<div class="orient" data-axis="x" data-deg="-90">X −90°</div><div class="orient" data-axis="x" data-deg="90">X +90°</div>
+<div class="orient" data-axis="y" data-deg="-90">Y −90°</div><div class="orient" data-axis="y" data-deg="90">Y +90°</div>
+<div class="orient" data-axis="z" data-deg="-90">Z −90°</div><div class="orient" data-axis="z" data-deg="90">Z +90°</div></div><div class="mini" id="orientationResetBtn" style="margin-top:6px">Сбросить ориентацию</div>
+
+<div class="section">🎵 Музыка</div><label class="mini" for="audioInput">Загрузить аудио</label><input id="audioInput" type="file" accept="audio/*"><div id="audioStatus">Аудио не загружено</div>
+<div class="row"><div class="mini" id="playAudioBtn">▶️ Играть</div><div class="mini" id="stopAudioBtn">⏹ Стоп</div></div>
+<label><input id="audioReactToggle" type="checkbox" checked>Реакция на бас</label><div>Чувствительность <span id="audioSensValue" class="val">1.0</span></div><input id="audioSens" type="range" min=".1" max="3" step=".1" value="1">
+
+<div class="section">Окружение</div><label><input id="envToggle" type="checkbox" checked>Кристаллы</label><label><input id="particlesToggle" type="checkbox" checked>Частицы</label><label><input id="ringsToggle" type="checkbox" checked>Кольца</label><label><input id="envReactToggle" type="checkbox" checked>Реакция окружения</label>
+<div>Скорость <span id="envSpeedValue" class="val">1.0</span></div><input id="envSpeed" type="range" min=".1" max="3" step=".1" value="1">
+<div>Частицы <span id="particleDensityValue" class="val">1000</span></div><input id="particleDensity" type="range" min="200" max="4000" step="100" value="1000"><input id="envColorPicker" type="color" value="#ff006e">
+
+<div class="section">Внешний вид</div><label><input id="wireframeToggle" type="checkbox">Wireframe поверх модели</label><label><input id="bloomToggle" type="checkbox" checked>Bloom</label><label><input id="dofToggle" type="checkbox" checked>Depth of field</label><label><input id="gridToggle" type="checkbox" checked>Сетка</label><label><input id="showFloor" type="checkbox" checked>Стеклянный пол</label><label><input id="doubleSided" type="checkbox" checked>Двусторонний рендер</label>
+<div>Bloom</div><input id="bloomStrength" type="range" min="0" max="3" step=".1" value="1.5">
+<div>Цвет модели</div><input id="colorPicker" type="color" value="#0088ff"><div>Фон</div><input id="bgColorPicker" type="color" value="#050510">
+<div class="section">Переход</div><div>Длительность <span id="transitionDurationValue" class="val">1.5</span>с</div><input id="transitionDuration" type="range" min=".5" max="5" step=".1" value="1.5">
+</div>
+
+<div id="info" class="panel">Добавьте STL-файлы</div><div id="drag" class="panel">Отпустите STL или аудио</div><div id="loading" class="panel">🎬 ПОДГОТОВКА СЦЕНЫ...</div><div id="rec" class="panel">REC <span id="recTime">00:00</span></div>
+<button id="settingsToggle">⚙️</button>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+<script type="module" src="./app.js"></script>
+</body></html>
