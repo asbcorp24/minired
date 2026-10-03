@@ -45,7 +45,32 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div style="font-size:11px;margin-top:6px">Следующая через <span id="plTimer" class="val">30.0с</span></div><input id="plInterval" type="range" min="5" max="120" value="30"><span id="plIntervalValue" class="val">30с</span></div>
 
 <div id="controls" class="panel">
-<details class="acc" open><summary>Модель</summary><div class="acc-body">
+<details class="acc"><summary>🎬 Auto Director</summary><div class="acc-body">
+<div style="font-size:11px;color:#9ca3af;margin:5px 0 8px">Автоматически анализирует STL, изображения и музыку, затем строит последовательность и стиль ролика.</div>
+<div>Стиль режиссуры</div>
+<select id="directorStyle">
+<option value="hi-tech">Hi-Tech</option>
+<option value="cyberpunk">Cyberpunk</option>
+<option value="space">Space</option>
+<option value="industrial">Industrial</option>
+<option value="minimal">Minimal</option>
+<option value="blueprint">Blueprint</option>
+<option value="dark-showroom">Dark showroom</option>
+</select>
+<div>Динамика <span id="directorEnergyValue" class="val">70</span>%</div>
+<input id="directorEnergy" type="range" min="0" max="100" step="5" value="70">
+<label><input id="directorUseMusic" type="checkbox" checked>Подогнать длительность под музыку</label>
+<label><input id="directorInterleave" type="checkbox" checked>Чередовать STL / фото</label>
+<label><input id="directorAutoCamera" type="checkbox" checked>Авто-ракурс для STL</label>
+<label><input id="directorPostFx" type="checkbox" checked>Настроить Post FX</label>
+<div>Длительность без музыки <span id="directorDurationValue" class="val">60</span>с</div>
+<input id="directorDuration" type="range" min="15" max="300" step="5" value="60">
+<div class="row" style="margin-top:7px">
+<div class="mini" id="directorBuildBtn">✨ Собрать ролик</div>
+<div class="mini" id="directorPreviewBtn">▶ С начала</div>
+</div>
+<div id="directorStatus" style="font-size:10px;color:#7dd3fc;margin-top:7px;line-height:1.4">Добавьте материалы и нажмите «Собрать ролик».</div>
+</div></details><details class="acc" open><summary>Модель</summary><div class="acc-body">
 <div>Прозрачность <span id="opacityValue" class="val">0.35</span></div><input id="opacitySlider" type="range" min=".05" max="1" step=".01" value=".35">
 <label><input id="fresnelToggle" type="checkbox" checked>Fresnel</label>
 <div>Fresnel power <span id="fresnelPowerValue" class="val">2.5</span></div><input id="fresnelPower" type="range" min=".5" max="6" step=".1" value="2.5">
