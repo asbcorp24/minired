@@ -55,7 +55,7 @@ const cubeEdges=new THREE.LineSegments(new THREE.EdgesGeometry(imageCube.geometr
 imageCube.add(cubeEdges);
 let cubeFaceIndex=4,cubeStep=0,cubeTransition=null,currentContentType=null;
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1};
 
 const baseUniforms={
  color:new THREE.Color(0x0088ff),
@@ -151,7 +151,19 @@ function geometryFromBuffer(buf){
  const box=g.boundingBox,c=new THREE.Vector3(),s=new THREE.Vector3();box.getCenter(c);box.getSize(s);
  g.translate(-c.x,-c.y,-c.z);const max=Math.max(s.x,s.y,s.z)||1;g.scale(100/max,100/max,100/max);g.computeVertexNormals();return g;
 }
-function meshFromBuffer(buf){const mesh=new THREE.Mesh(geometryFromBuffer(buf),makeMaterial());addWire(mesh);return mesh;}
+function meshFromBuffer(buf){const mesh=new THREE.Mesh(geometryFromBuffer(buf),makeMaterial());addWire(mesh);mesh.scale.setScalar(state.objectScale);return mesh;}
+function applyObjectScale(){
+ if(currentMesh)currentMesh.scale.setScalar(state.objectScale);
+ if(oldMesh)oldMesh.scale.setScalar(state.objectScale);
+ imageCubeGroup.scale.setScalar(state.objectScale);
+}
+function setObjectScale(value){
+ state.objectScale=Math.max(.2,Math.min(3,+value||1));
+ if($('objectScale'))$('objectScale').value=state.objectScale;
+ if($('objectScaleValue'))$('objectScaleValue').textContent=state.objectScale.toFixed(2);
+ applyObjectScale();
+ saveSoon();
+}
 
 function disposeTransitionFX(){
  if(!transitionFX)return;
@@ -227,7 +239,7 @@ async function showImageItem(file){
    const mat=cubeMaterials[cubeFaceIndex];
    if(mat.map)mat.map.dispose();
    mat.map=texture;mat.color.set(0xffffff);mat.needsUpdate=true;
-   imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.visible=true;cubeTransition=null;
+   imageCube.rotation.set(0,0,0);imageCubeGroup.position.set(0,0,0);imageCubeGroup.scale.setScalar(state.objectScale);imageCubeGroup.visible=true;cubeTransition=null;
   }else{
    cubeStep=(cubeStep+1)%4;
    const nextFace=sideFaces[cubeStep],mat=cubeMaterials[nextFace];
@@ -399,7 +411,7 @@ function animate(){
  if(playlist.length>1&&playlistPlaying&&(currentMesh||imageCubeGroup.visible)&&transitionState==='idle'&&!cubeTransition){playlistTimer+=dt;$('plTimer').textContent=Math.max(0,playlistInterval-playlistTimer).toFixed(1)+'с';if(playlistTimer>=playlistInterval)nextModel();}else $('plTimer').textContent='—';
  if(fly&&flyPath){flyTime+=dt;const q=(flyTime/14)%1;camera.position.copy(flyPath.getPointAt(q));look.y=Math.sin(q*Math.PI*4)*15;camera.lookAt(look);bokehPass.uniforms.focus.value=camera.position.distanceTo(look);}else controls.update();
  if(currentMesh&&state.autoRotate&&!state.rotPaused){const a=dt*.15*state.speed;[currentMesh,oldMesh].filter(Boolean).forEach(m=>m.rotation[state.axis]+=a);}
- if(imageCubeGroup.visible&&!cubeTransition){imageCube.rotation.y+=dt*.03;}
+ if(imageCubeGroup.visible&&!cubeTransition){imageCube.rotation.y+=dt*state.cubeSpinSpeed;}
  rim1.intensity=4+Math.sin(t*1.5)*1.5;rim2.intensity=4+Math.cos(t*1.8)*1.5;
  const mult=1+(state.audioReact&&state.envReact?bass*3:0),de=dt*state.envSpeed;
  if(state.env)crystals.forEach((c,i)=>{const u=c.userData;c.rotation.x+=u.rs*de*60;c.rotation.y+=u.rs*de*45;u.a+=u.os*de;c.position.set(Math.cos(u.a)*u.r,u.y+Math.sin(t*u.b+i)*u.ba,Math.sin(u.a)*u.r);c.scale.setScalar(1+(state.audioReact&&state.envReact?bass*.8:0));c.material.opacity=Math.min(u.op*mult,1);});
@@ -425,6 +437,11 @@ $('bgColorPicker').oninput=e=>{scene.background.set(e.target.value);scene.fog.co
 $('autoRotateToggle').onchange=e=>{state.autoRotate=e.target.checked;saveSoon();};
 document.querySelectorAll('.axis').forEach(b=>b.onclick=()=>{document.querySelectorAll('.axis').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.axis=b.dataset.axis;saveSoon();});
 $('speedSlider').oninput=e=>{state.speed=+e.target.value;setText('speedValue',Math.abs(state.speed).toFixed(1));$('directionLabel').textContent=state.speed<0?'↺':state.speed>0?'↻':'⏸';saveSoon();};
+$('cubeSpinSpeed').oninput=e=>{state.cubeSpinSpeed=+e.target.value;setText('cubeSpinSpeedValue',state.cubeSpinSpeed.toFixed(2));saveSoon();};
+$('objectScale').oninput=e=>setObjectScale(+e.target.value);
+$('zoomInBtn').onclick=()=>setObjectScale(state.objectScale+.1);
+$('zoomOutBtn').onclick=()=>setObjectScale(state.objectScale-.1);
+$('zoomResetBtn').onclick=()=>setObjectScale(1);
 $('reverseBtn').onclick=()=>{$('speedSlider').value=-state.speed;$('speedSlider').dispatchEvent(new Event('input'));};
 $('pauseRotBtn').onclick=()=>{state.rotPaused=!state.rotPaused;$('pauseRotBtn').textContent=state.rotPaused?'▶️':'⏸';};
 document.querySelectorAll('.orient').forEach(b=>b.onclick=()=>{if(currentMesh)currentMesh.rotation[b.dataset.axis]+=THREE.MathUtils.degToRad(+b.dataset.deg);});
@@ -455,7 +472,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 const KEY='stl-cinematic-settings-v2';let saveTimer;
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSettings,100);}
 function saveSettings(){
- const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval'];
+ const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval','cubeSpinSpeed','objectScale'];
  const d={axis:state.axis};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
 }
 function restoreSettings(){
@@ -464,5 +481,8 @@ function restoreSettings(){
  if(['x','y','z'].includes(d.axis)){state.axis=d.axis;document.querySelectorAll('.axis').forEach(b=>b.classList.toggle('active',b.dataset.axis===state.axis));}
 }
 restoreSettings();
+state.cubeSpinSpeed=+$('cubeSpinSpeed').value||.3;
+setText('cubeSpinSpeedValue',state.cubeSpinSpeed.toFixed(2));
+setObjectScale(+$('objectScale').value||1);
 
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);bloomPass.resolution.set(innerWidth,innerHeight);});
