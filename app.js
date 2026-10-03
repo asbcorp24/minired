@@ -6,6 +6,12 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {BokehPass} from 'three/addons/postprocessing/BokehPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
+import {GlitchPass} from 'three/addons/postprocessing/GlitchPass.js';
+import {AfterimagePass} from 'three/addons/postprocessing/AfterimagePass.js';
+import {RGBShiftShader} from 'three/addons/shaders/RGBShiftShader.js';
+import {FilmShader} from 'three/addons/shaders/FilmShader.js';
+import {VignetteShader} from 'three/addons/shaders/VignetteShader.js';
 import {FontLoader} from 'three/addons/loaders/FontLoader.js';
 import {TextGeometry} from 'three/addons/geometries/TextGeometry.js';
 
@@ -38,12 +44,32 @@ controls.enableDamping=true;
 controls.dampingFactor=.08;
 
 const composer=new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene,camera));
-const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.5,.7,.08);
-composer.addPass(bloomPass);
-const bokehPass=new BokehPass(scene,camera,{focus:160,aperture:.00012,maxblur:.01});
-composer.addPass(bokehPass);
-composer.addPass(new OutputPass());
+const renderPass=new RenderPass(scene,camera);composer.addPass(renderPass);
+const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.5,.7,.08);composer.addPass(bloomPass);
+const bokehPass=new BokehPass(scene,camera,{focus:160,aperture:.00012,maxblur:.01});composer.addPass(bokehPass);
+
+const afterimagePass=new AfterimagePass();afterimagePass.enabled=false;afterimagePass.uniforms.damp.value=.88;composer.addPass(afterimagePass);
+const rgbShiftPass=new ShaderPass(RGBShiftShader);rgbShiftPass.enabled=false;rgbShiftPass.uniforms.amount.value=.004;composer.addPass(rgbShiftPass);
+const chromaPass=new ShaderPass({
+ uniforms:{tDiffuse:{value:null},amount:{value:.0025}},
+ vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+ fragmentShader:`uniform sampler2D tDiffuse;uniform float amount;varying vec2 vUv;void main(){vec2 d=vUv-.5;float r=length(d);vec2 o=normalize(d+1e-6)*amount*r;float R=texture2D(tDiffuse,vUv+o).r;float G=texture2D(tDiffuse,vUv).g;float B=texture2D(tDiffuse,vUv-o).b;gl_FragColor=vec4(R,G,B,1.0);}`
+});chromaPass.enabled=false;composer.addPass(chromaPass);
+const filmPass=new ShaderPass(FilmShader);filmPass.enabled=false;filmPass.uniforms.intensity.value=.18;composer.addPass(filmPass);
+const scanlinePass=new ShaderPass({
+ uniforms:{tDiffuse:{value:null},amount:{value:.2},time:{value:0}},
+ vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+ fragmentShader:`uniform sampler2D tDiffuse;uniform float amount;uniform float time;varying vec2 vUv;void main(){vec4 c=texture2D(tDiffuse,vUv);float s=.5+.5*sin(vUv.y*1200.0+time*18.0);c.rgb*=1.0-amount*.35*s;gl_FragColor=c;}`
+});scanlinePass.enabled=false;composer.addPass(scanlinePass);
+const glitchPass=new GlitchPass();glitchPass.enabled=false;glitchPass.goWild=false;composer.addPass(glitchPass);
+const vignettePass=new ShaderPass(VignetteShader);vignettePass.enabled=false;vignettePass.uniforms.offset.value=1.0;vignettePass.uniforms.darkness.value=1.2;composer.addPass(vignettePass);
+const gradingPass=new ShaderPass({
+ uniforms:{tDiffuse:{value:null},contrast:{value:1},saturation:{value:1},temperature:{value:0},tint:{value:0}},
+ vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+ fragmentShader:`uniform sampler2D tDiffuse;uniform float contrast;uniform float saturation;uniform float temperature;uniform float tint;varying vec2 vUv;
+ void main(){vec4 c=texture2D(tDiffuse,vUv);vec3 col=(c.rgb-.5)*contrast+.5;float l=dot(col,vec3(.2126,.7152,.0722));col=mix(vec3(l),col,saturation);col.r+=temperature*.10;col.b-=temperature*.10;col.g+=tint*.08;col.r-=tint*.03;col.b-=tint*.03;gl_FragColor=vec4(clamp(col,0.0,1.0),c.a);}`
+});gradingPass.enabled=true;composer.addPass(gradingPass);
+const outputPass=new OutputPass();composer.addPass(outputPass);
 
 scene.add(new THREE.AmbientLight(0xffffff,.42));
 const keyLight=new THREE.DirectionalLight(0xffffff,1.4);keyLight.position.set(1,2,1);scene.add(keyLight);
@@ -105,8 +131,51 @@ function faceQuaternionForStep(step){
  return q;
 }
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom'};
 
+const gradePresets={
+ none:{contrast:1,saturation:1,temperature:0,tint:0,exposure:1.05},
+ 'cyberpunk':{contrast:1.28,saturation:1.32,temperature:-.12,tint:.24,exposure:1.08},
+ 'cold-tech':{contrast:1.16,saturation:.88,temperature:-.28,tint:.04,exposure:1.02},
+ 'warm-cinema':{contrast:1.18,saturation:1.08,temperature:.20,tint:.03,exposure:1.06},
+ neon:{contrast:1.32,saturation:1.42,temperature:-.05,tint:.18,exposure:1.12},
+ blueprint:{contrast:1.12,saturation:.34,temperature:-.32,tint:-.06,exposure:.98},
+ 'clean-product':{contrast:1.06,saturation:.96,temperature:.02,tint:0,exposure:1.12}
+};
+const scenePresets={
+ 'hi-tech':{bg:'#050510',fog:'#050510',bloom:1.6,model:'#0088ff',edge:'#00ffff',env:'#ff006e',floor:true,grid:true,particles:true,rings:true,grade:'cold-tech',glass:'#66ccff',glassOpacity:.13},
+ cyberpunk:{bg:'#08040f',fog:'#12081a',bloom:2.0,model:'#6a5cff',edge:'#ff00aa',env:'#00e5ff',floor:true,grid:true,particles:true,rings:true,grade:'cyberpunk',glass:'#4a1b66',glassOpacity:.16},
+ space:{bg:'#000005',fog:'#02020a',bloom:1.45,model:'#88aaff',edge:'#88ccff',env:'#4466ff',floor:false,grid:false,particles:true,rings:true,grade:'neon',glass:'#334477',glassOpacity:.10},
+ industrial:{bg:'#121212',fog:'#1f1f1f',bloom:.8,model:'#999999',edge:'#ffaa00',env:'#ff6600',floor:true,grid:true,particles:false,rings:false,grade:'warm-cinema',glass:'#777777',glassOpacity:.08},
+ minimal:{bg:'#f4f4f4',fog:'#f4f4f4',bloom:.25,model:'#d7d7d7',edge:'#555555',env:'#aaaaaa',floor:false,grid:false,particles:false,rings:false,grade:'clean-product',glass:'#ffffff',glassOpacity:.06},
+ glass:{bg:'#071018',fog:'#071018',bloom:1.55,model:'#88ccff',edge:'#b8f5ff',env:'#88ccff',floor:true,grid:false,particles:true,rings:true,grade:'cold-tech',glass:'#8fdcff',glassOpacity:.20},
+ blueprint:{bg:'#0a1b3c',fog:'#0a1b3c',bloom:.9,model:'#8fd3ff',edge:'#d8f3ff',env:'#4aa3ff',floor:false,grid:true,particles:false,rings:false,grade:'blueprint',glass:'#4a80aa',glassOpacity:.06},
+ 'dark-showroom':{bg:'#030303',fog:'#080808',bloom:1.2,model:'#ffffff',edge:'#ffffff',env:'#444444',floor:true,grid:false,particles:false,rings:false,grade:'clean-product',glass:'#333333',glassOpacity:.10}
+};
+let customScenePreset=null;
+function applyGradePreset(name){
+ const p=gradePresets[name]||gradePresets.none;state.gradePreset=name;
+ gradingPass.uniforms.contrast.value=p.contrast;gradingPass.uniforms.saturation.value=p.saturation;
+ gradingPass.uniforms.temperature.value=p.temperature;gradingPass.uniforms.tint.value=p.tint;renderer.toneMappingExposure=p.exposure;
+ if($('gradeContrast')){$('gradeContrast').value=p.contrast;setText('gradeContrastValue',p.contrast.toFixed(2));}
+ if($('gradeSaturation')){$('gradeSaturation').value=p.saturation;setText('gradeSaturationValue',p.saturation.toFixed(2));}
+ if($('gradeTemperature')){$('gradeTemperature').value=p.temperature;setText('gradeTemperatureValue',p.temperature.toFixed(2));}
+ if($('gradeTint')){$('gradeTint').value=p.tint;setText('gradeTintValue',p.tint.toFixed(2));}
+ if($('gradePreset'))$('gradePreset').value=name;saveSoon();
+}
+function applyScenePresetByName(name){
+ const p=name==='custom'?customScenePreset:scenePresets[name];if(!p)return;
+ state.scenePreset=name;scene.background.set(p.bg);scene.fog.color.set(p.fog);bloomPass.strength=p.bloom;
+ baseUniforms.color.set(p.model);baseUniforms.fresnel.set(p.edge);syncMaterials();
+ cubeEdges.material.color.set(p.edge);glassMaterial.color.set(p.glass);state.cubeGlassOpacity=p.glassOpacity;glassMaterial.opacity=p.glassOpacity;
+ const ec=new THREE.Color(p.env);crystals.forEach((x,i)=>x.material.color.copy(ec).multiplyScalar(.65+(i%3)*.15));if(particles)particles.material.color.copy(ec);rings.forEach((x,i)=>x.material.color.copy(ec).offsetHSL(i*.1,0,0));
+ floor.visible=p.floor;grid.visible=p.grid;particleGroup.visible=p.particles;ringGroup.visible=p.rings;state.particles=p.particles;state.rings=p.rings;
+ if($('bgColorPicker'))$('bgColorPicker').value=p.bg;if($('colorPicker'))$('colorPicker').value=p.model;if($('cubeEdgeColor'))$('cubeEdgeColor').value=p.edge;if($('cubeGlassColor'))$('cubeGlassColor').value=p.glass;
+ if($('cubeGlassOpacity')){$('cubeGlassOpacity').value=p.glassOpacity;setText('cubeGlassValue',p.glassOpacity.toFixed(2));}
+ if($('showFloor'))$('showFloor').checked=p.floor;if($('gridToggle'))$('gridToggle').checked=p.grid;if($('particlesToggle'))$('particlesToggle').checked=p.particles;if($('ringsToggle'))$('ringsToggle').checked=p.rings;
+ if($('bloomStrength'))$('bloomStrength').value=p.bloom;if($('scenePreset'))$('scenePreset').value=name;
+ applyGradePreset(p.grade||'none');saveSoon();
+}
 const baseUniforms={
  color:new THREE.Color(0x0088ff),
  fresnel:new THREE.Color(0x00ffff),
@@ -714,7 +783,7 @@ function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop(
 function ease(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
 const clock=new THREE.Clock(),look=new THREE.Vector3();
 function animate(){
- requestAnimationFrame(animate);const dt=clock.getDelta(),t=clock.elapsedTime;
+ requestAnimationFrame(animate);const dt=clock.getDelta(),t=clock.elapsedTime;scanlinePass.uniforms.time.value=t;filmPass.uniforms.time.value=t;
  if(transitionState==='cross'){
   transitionTime+=dt;const p=Math.min(transitionTime/Math.max(state.transition,.05),1),e=ease(p);
   const mode=state.transitionMode;
@@ -992,6 +1061,30 @@ $('textY').oninput=e=>{setText('textYValue',Math.round(+e.target.value));updateA
 $('textZ').oninput=e=>{setText('textZValue',Math.round(+e.target.value));updateActiveText(false);};
 $('textFaceCamera').onchange=()=>updateActiveText(false);
 
+$('fxChromatic').onchange=e=>{chromaPass.enabled=e.target.checked;saveSoon();};
+$('fxChromaticAmount').oninput=e=>{chromaPass.uniforms.amount.value=+e.target.value;setText('fxChromaticValue',(+e.target.value).toFixed(4));saveSoon();};
+$('fxVignette').onchange=e=>{vignettePass.enabled=e.target.checked;saveSoon();};
+$('fxVignetteAmount').oninput=e=>{vignettePass.uniforms.darkness.value=+e.target.value;setText('fxVignetteValue',(+e.target.value).toFixed(2));saveSoon();};
+$('fxFilm').onchange=e=>{filmPass.enabled=e.target.checked;saveSoon();};
+$('fxFilmAmount').oninput=e=>{filmPass.uniforms.intensity.value=+e.target.value;setText('fxFilmValue',(+e.target.value).toFixed(2));saveSoon();};
+$('fxScanlines').onchange=e=>{scanlinePass.enabled=e.target.checked;saveSoon();};
+$('fxScanlinesAmount').oninput=e=>{scanlinePass.uniforms.amount.value=+e.target.value;setText('fxScanlinesValue',(+e.target.value).toFixed(2));saveSoon();};
+$('fxGlitch').onchange=e=>{glitchPass.enabled=e.target.checked;saveSoon();};
+$('fxGlitchAmount').oninput=e=>{const v=+e.target.value;glitchPass.goWild=v>.65;setText('fxGlitchValue',v.toFixed(2));saveSoon();};
+$('fxRgb').onchange=e=>{rgbShiftPass.enabled=e.target.checked;saveSoon();};
+$('fxRgbAmount').oninput=e=>{rgbShiftPass.uniforms.amount.value=+e.target.value;setText('fxRgbValue',(+e.target.value).toFixed(4));saveSoon();};
+$('fxMotion').onchange=e=>{afterimagePass.enabled=e.target.checked;saveSoon();};
+$('fxMotionAmount').oninput=e=>{afterimagePass.uniforms.damp.value=+e.target.value;setText('fxMotionValue',(+e.target.value).toFixed(2));saveSoon();};
+$('fxGrading').onchange=e=>{gradingPass.enabled=e.target.checked;saveSoon();};
+$('gradeContrast').oninput=e=>{gradingPass.uniforms.contrast.value=+e.target.value;setText('gradeContrastValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
+$('gradeSaturation').oninput=e=>{gradingPass.uniforms.saturation.value=+e.target.value;setText('gradeSaturationValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
+$('gradeTemperature').oninput=e=>{gradingPass.uniforms.temperature.value=+e.target.value;setText('gradeTemperatureValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
+$('gradeTint').oninput=e=>{gradingPass.uniforms.tint.value=+e.target.value;setText('gradeTintValue',(+e.target.value).toFixed(2));$('gradePreset').value='none';state.gradePreset='none';saveSoon();};
+$('gradePreset').onchange=e=>applyGradePreset(e.target.value);
+$('applyScenePreset').onclick=()=>applyScenePresetByName($('scenePreset').value);
+$('scenePreset').onchange=e=>{state.scenePreset=e.target.value;};
+$('saveCustomPreset').onclick=()=>{customScenePreset={bg:'#'+scene.background.getHexString(),fog:'#'+scene.fog.color.getHexString(),bloom:bloomPass.strength,model:'#'+baseUniforms.color.getHexString(),edge:$('cubeEdgeColor').value,env:$('envColorPicker').value,floor:floor.visible,grid:grid.visible,particles:particleGroup.visible,rings:ringGroup.visible,grade:state.gradePreset,glass:$('cubeGlassColor').value,glassOpacity:state.cubeGlassOpacity};state.scenePreset='custom';$('scenePreset').value='custom';saveSoon();$('info').textContent='💾 Custom scene preset сохранён';};
+
 $('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();saveSoon();};
 $('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveSoon();};
 $('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked&&!imageCubeGroup.visible;saveSoon();};
@@ -1047,13 +1140,13 @@ function applySettingsSnapshot(o){Object.entries(o||{}).forEach(([id,v])=>{const
 const KEY='stl-cinematic-settings-v2';let saveTimer;
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSettings,100);}
 function saveSettings(){
- const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval','cubeSpinSpeed','objectScale','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle'];
- const d={axis:state.axis};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
+ const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval','cubeSpinSpeed','objectScale','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset'];
+ const d={axis:state.axis,customScenePreset};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
 }
 function restoreSettings(){
  let d;try{d=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}if(!d)return;
- Object.keys(d).forEach(id=>{if(id==='axis'||!$(id))return;const e=$(id);if(e.type==='checkbox'){e.checked=!!d[id];e.dispatchEvent(new Event('change'));}else{e.value=d[id];e.dispatchEvent(new Event('input'));}});
- if(['x','y','z'].includes(d.axis)){state.axis=d.axis;document.querySelectorAll('.axis').forEach(b=>b.classList.toggle('active',b.dataset.axis===state.axis));}
+ Object.keys(d).forEach(id=>{if(id==='axis'||id==='customScenePreset'||!$(id))return;const e=$(id);if(e.type==='checkbox'){e.checked=!!d[id];e.dispatchEvent(new Event('change'));}else{e.value=d[id];e.dispatchEvent(new Event('input'));}});
+ if(['x','y','z'].includes(d.axis)){state.axis=d.axis;document.querySelectorAll('.axis').forEach(b=>b.classList.toggle('active',b.dataset.axis===state.axis));}if(d.customScenePreset)customScenePreset=d.customScenePreset;
 }
 restoreSettings();
 state.cubeSpinSpeed=+$('cubeSpinSpeed').value||.3;
