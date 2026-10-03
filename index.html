@@ -166,6 +166,73 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div class="section">Внешний вид</div><label><input id="wireframeToggle" type="checkbox">Wireframe поверх модели</label><label><input id="bloomToggle" type="checkbox" checked>Bloom</label><label><input id="dofToggle" type="checkbox" checked>Depth of field</label><label><input id="gridToggle" type="checkbox" checked>Сетка</label><label><input id="showFloor" type="checkbox" checked>Стеклянный пол</label><label><input id="doubleSided" type="checkbox" checked>Двусторонний рендер</label>
 <div>Bloom</div><input id="bloomStrength" type="range" min="0" max="3" step=".1" value="1.5">
 <div>Цвет модели</div><input id="colorPicker" type="color" value="#0088ff"><div>Фон</div><input id="bgColorPicker" type="color" value="#050510">
+<div class="section">Post FX</div>
+<label><input id="fxChromatic" type="checkbox">Chromatic aberration</label>
+<div>Chromatic <span id="fxChromaticValue" class="val">0.0025</span></div>
+<input id="fxChromaticAmount" type="range" min="0" max=".02" step=".0005" value=".0025">
+
+<label><input id="fxVignette" type="checkbox">Vignette</label>
+<div>Vignette <span id="fxVignetteValue" class="val">1.20</span></div>
+<input id="fxVignetteAmount" type="range" min="0" max="3" step=".05" value="1.2">
+
+<label><input id="fxFilm" type="checkbox">Film grain</label>
+<div>Grain <span id="fxFilmValue" class="val">0.18</span></div>
+<input id="fxFilmAmount" type="range" min="0" max="1" step=".01" value=".18">
+
+<label><input id="fxScanlines" type="checkbox">Scanlines</label>
+<div>Scanlines <span id="fxScanlinesValue" class="val">0.20</span></div>
+<input id="fxScanlinesAmount" type="range" min="0" max="1" step=".01" value=".20">
+
+<label><input id="fxGlitch" type="checkbox">Glitch</label>
+<div>Glitch <span id="fxGlitchValue" class="val">0.35</span></div>
+<input id="fxGlitchAmount" type="range" min="0" max="1" step=".01" value=".35">
+
+<label><input id="fxRgb" type="checkbox">RGB split</label>
+<div>RGB split <span id="fxRgbValue" class="val">0.0040</span></div>
+<input id="fxRgbAmount" type="range" min="0" max=".03" step=".0005" value=".004">
+
+<label><input id="fxMotion" type="checkbox">Motion blur</label>
+<div>Motion blur <span id="fxMotionValue" class="val">0.88</span></div>
+<input id="fxMotionAmount" type="range" min=".70" max=".99" step=".01" value=".88">
+
+<label><input id="fxGrading" type="checkbox" checked>Color grading</label>
+<div>Contrast <span id="gradeContrastValue" class="val">1.00</span></div>
+<input id="gradeContrast" type="range" min=".5" max="2" step=".01" value="1">
+<div>Saturation <span id="gradeSaturationValue" class="val">1.00</span></div>
+<input id="gradeSaturation" type="range" min="0" max="2" step=".01" value="1">
+<div>Temperature <span id="gradeTemperatureValue" class="val">0.00</span></div>
+<input id="gradeTemperature" type="range" min="-1" max="1" step=".01" value="0">
+<div>Tint <span id="gradeTintValue" class="val">0.00</span></div>
+<input id="gradeTint" type="range" min="-1" max="1" step=".01" value="0">
+
+<div class="section">Grade / LUT preset</div>
+<select id="gradePreset">
+<option value="none">None</option>
+<option value="cyberpunk">Cyberpunk</option>
+<option value="cold-tech">Cold Tech</option>
+<option value="warm-cinema">Warm Cinema</option>
+<option value="neon">Neon</option>
+<option value="blueprint">Blueprint</option>
+<option value="clean-product">Clean Product</option>
+</select>
+
+<div class="section">Scene Preset</div>
+<select id="scenePreset">
+<option value="custom">Custom</option>
+<option value="hi-tech">Hi-Tech</option>
+<option value="cyberpunk">Cyberpunk</option>
+<option value="space">Space</option>
+<option value="industrial">Industrial</option>
+<option value="minimal">Minimal</option>
+<option value="glass">Glass</option>
+<option value="blueprint">Blueprint</option>
+<option value="dark-showroom">Dark showroom</option>
+</select>
+<div class="row" style="margin-top:6px">
+<div class="mini" id="applyScenePreset">Применить</div>
+<div class="mini" id="saveCustomPreset">Custom</div>
+</div>
+
 <div class="section">Переход</div>
 <div>Эффект смены модели</div>
 <select id="transitionMode">
