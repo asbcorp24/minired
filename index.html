@@ -85,6 +85,8 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 </div></details><details class="acc"><summary>Куб с изображениями</summary><div class="acc-body">
 <div>Скорость вращения <span id="cubeSpinSpeedValue" class="val">0.30</span></div>
 <input id="cubeSpinSpeed" type="range" min="0" max="3" step="0.05" value="0.30">
+<div>Поворот при смене <span id="cubeTurnDurationValue" class="val">2.2</span>с</div>
+<input id="cubeTurnDuration" type="range" min=".8" max="6" step=".1" value="2.2">
 <div style="margin-top:6px">Подгонка изображения</div>
 <select id="imageFitMode">
 <option value="contain">Contain — целиком</option>
@@ -200,6 +202,7 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div>Битрейт <span id="stereoBitrateValue" class="val">24</span> Мбит/с</div>
 <input id="stereoBitrate" type="range" min="8" max="60" step="1" value="24">
 <label><input id="stereoSwapEyes" type="checkbox">Поменять L/R местами</label>
+<label><input id="stereoPerformanceMode" type="checkbox" checked>Оптимизировать предпросмотр при записи</label>
 
 </div></details><details class="acc"><summary>Авто-камера STL</summary><div class="acc-body">
 <select id="cameraPreset">
