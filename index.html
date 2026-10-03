@@ -117,9 +117,18 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <option value="scale">Scale</option>
 <option value="rise">Rise</option>
 <option value="type-on">Type-on</option>
+<option value="letter-burst">Letter burst — по буквам</option>
 </select>
 <div>Длительность <span id="textAnimDurationValue" class="val">1.2</span>с</div>
 <input id="textAnimDuration" type="range" min=".2" max="5" step=".1" value="1.2">
+<div>Задержка букв <span id="textLetterDelayValue" class="val">0.08</span>с</div>
+<input id="textLetterDelay" type="range" min="0" max=".5" step=".01" value=".08">
+<div>Глубина вылета <span id="textLetterDepthValue" class="val">70</span></div>
+<input id="textLetterDepth" type="range" min="10" max="220" step="5" value="70">
+<div>Поворот букв <span id="textLetterSpinValue" class="val">35</span>°</div>
+<input id="textLetterSpin" type="range" min="0" max="180" step="5" value="35">
+<div>Вспышка glow <span id="textLetterFlashValue" class="val">1.50</span></div>
+<input id="textLetterFlash" type="range" min="0" max="4" step=".05" value="1.5">
 <div>Позиция X <span id="textXValue" class="val">0</span></div>
 <input id="textX" type="range" min="-150" max="150" step="1" value="0">
 <div>Позиция Y <span id="textYValue" class="val">35</span></div>
