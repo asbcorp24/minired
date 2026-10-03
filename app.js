@@ -45,7 +45,7 @@ grid.material.transparent=true;grid.material.opacity=.3;grid.material.depthWrite
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshStandardMaterial({color:0x0a0a20,metalness:.95,roughness:.15,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false}));
 floor.rotation.x=-Math.PI/2;floor.position.y=-35;scene.add(floor);
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1};
 
 const baseUniforms={
  color:new THREE.Color(0x0088ff),
@@ -134,7 +134,7 @@ const rings=[];
  const ring=new THREE.Points(g,m);ring.rotation.x=tilt;ring.rotation.z=tilt*.5;ring.userData={base:ring.rotation.z,speed};ringGroup.add(ring);rings.push(ring);
 });
 
-let currentMesh=null,oldMesh=null,transitionState='idle',transitionTime=0,pending=null;
+let currentMesh=null,oldMesh=null,transitionState='idle',transitionTime=0,pending=null,transitionFX=null;
 const loader=new STLLoader();
 function geometryFromBuffer(buf){
  const g=loader.parse(buf);g.computeBoundingBox();
@@ -142,6 +142,60 @@ function geometryFromBuffer(buf){
  g.translate(-c.x,-c.y,-c.z);const max=Math.max(s.x,s.y,s.z)||1;g.scale(100/max,100/max,100/max);g.computeVertexNormals();return g;
 }
 function meshFromBuffer(buf){const mesh=new THREE.Mesh(geometryFromBuffer(buf),makeMaterial());addWire(mesh);return mesh;}
+
+function disposeTransitionFX(){
+ if(!transitionFX)return;
+ scene.remove(transitionFX);
+ transitionFX.geometry&&transitionFX.geometry.dispose();
+ transitionFX.material&&transitionFX.material.dispose();
+ transitionFX=null;
+}
+function sampledPositions(geometry,maxPoints=4500){
+ const src=geometry.attributes.position.array,count=Math.min(maxPoints,Math.floor(src.length/3));
+ const out=new Float32Array(count*3),step=Math.max(1,Math.floor(src.length/3/count));
+ let k=0;
+ for(let i=0;i<src.length/3&&k<count;i+=step,k++){
+  out[k*3]=src[i*3];out[k*3+1]=src[i*3+1];out[k*3+2]=src[i*3+2];
+ }
+ return out;
+}
+function beginTransitionFX(mode){
+ disposeTransitionFX();
+ if(!oldMesh||!currentMesh)return;
+ if(mode==='particles'){
+  const base=sampledPositions(oldMesh.geometry),dirs=new Float32Array(base.length);
+  for(let i=0;i<base.length;i+=3){
+   const v=new THREE.Vector3(base[i],base[i+1],base[i+2]).normalize();
+   dirs[i]=v.x*(18+Math.random()*55)+(Math.random()-.5)*18;
+   dirs[i+1]=v.y*(18+Math.random()*55)+(Math.random()-.5)*18;
+   dirs[i+2]=v.z*(18+Math.random()*55)+(Math.random()-.5)*18;
+  }
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(base.slice(),3));
+  const m=new THREE.PointsMaterial({size:1.5,map:ptex,color:baseUniforms.fresnel.clone(),transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false});
+  transitionFX=new THREE.Points(g,m);transitionFX.userData={mode,base,dirs};scene.add(transitionFX);
+ }else if(mode==='assemble'){
+  const target=sampledPositions(currentMesh.geometry),start=new Float32Array(target.length);
+  for(let i=0;i<target.length;i+=3){
+   const r=90+Math.random()*120,a=Math.random()*Math.PI*2,z=(Math.random()-.5)*140;
+   start[i]=Math.cos(a)*r;start[i+1]=z;start[i+2]=Math.sin(a)*r;
+  }
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(start.slice(),3));
+  const m=new THREE.PointsMaterial({size:1.5,map:ptex,color:baseUniforms.fresnel.clone(),transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false});
+  transitionFX=new THREE.Points(g,m);transitionFX.userData={mode,start,target};scene.add(transitionFX);
+ }
+}
+function updateTransitionFX(p,e){
+ if(!transitionFX)return;
+ const pos=transitionFX.geometry.attributes.position.array,u=transitionFX.userData;
+ if(u.mode==='particles'){
+  for(let i=0;i<pos.length;i++)pos[i]=u.base[i]+u.dirs[i]*e;
+  transitionFX.material.opacity=1-e;
+ }else if(u.mode==='assemble'){
+  for(let i=0;i<pos.length;i++)pos[i]=THREE.MathUtils.lerp(u.start[i],u.target[i],e);
+  transitionFX.material.opacity=1-p*.65;
+ }
+ transitionFX.geometry.attributes.position.needsUpdate=true;
+}
 function loadSTL(file){
  if(!file)return;
  if(transitionState!=='idle'){pending=file;return;}
@@ -150,7 +204,7 @@ function loadSTL(file){
  r.onload=e=>{
   try{
    const next=meshFromBuffer(e.target.result);scene.add(next);
-   if(currentMesh){oldMesh=currentMesh;currentMesh=next;transitionState='cross';}
+   if(currentMesh){oldMesh=currentMesh;currentMesh=next;transitionState='cross';beginTransitionFX(state.transitionMode);}
    else{currentMesh=next;transitionState='in';}
    transitionTime=0;showLabel(file.name);
    $('info').textContent='✅ '+file.name+' | '+Math.round(next.geometry.attributes.position.count/3).toLocaleString()+' треуг.';
@@ -176,7 +230,7 @@ function renderPlaylist(){
 }
 function addFiles(files){for(const f of files)if(f.name.toLowerCase().endsWith('.stl'))playlist.push({name:f.name,file:f});renderPlaylist();if(!currentMesh&&playlist.length)loadSTL(playlist[0].file);}
 function nextModel(){if(!playlist.length)return;playlistIndex=(playlistIndex+1)%playlist.length;playlistTimer=0;renderPlaylist();loadSTL(playlist[playlistIndex].file);}
-function clearModels(){disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';hideLabel();}
+function clearModels(){disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);currentMesh=oldMesh=null;transitionState='idle';hideLabel();}
 
 let label=null,labelAlpha=0,labelHold=0;
 function showLabel(name){
@@ -238,9 +292,28 @@ function animate(){
  requestAnimationFrame(animate);const dt=clock.getDelta(),t=clock.elapsedTime;
  if(transitionState==='cross'){
   transitionTime+=dt;const p=Math.min(transitionTime/Math.max(state.transition,.05),1),e=ease(p);
-  if(oldMesh){oldMesh.material.uniforms.uAlpha.value=1-e;const w=oldMesh.getObjectByName('wire');if(w)w.material.opacity=.72*(1-e);}
-  if(currentMesh){currentMesh.material.uniforms.uAlpha.value=e;const w=currentMesh.getObjectByName('wire');if(w)w.material.opacity=.72*e;}
-  if(p>=1){disposeModel(oldMesh);oldMesh=null;transitionState='idle';if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f),0);}}
+  const mode=state.transitionMode;
+  if(mode==='crossfade'){
+   if(oldMesh){oldMesh.material.uniforms.uAlpha.value=1-e;const w=oldMesh.getObjectByName('wire');if(w)w.material.opacity=.72*(1-e);}
+   if(currentMesh){currentMesh.material.uniforms.uAlpha.value=e;const w=currentMesh.getObjectByName('wire');if(w)w.material.opacity=.72*e;}
+  }else if(mode==='particles'){
+   if(oldMesh){oldMesh.material.uniforms.uAlpha.value=Math.max(0,1-p*1.8);const w=oldMesh.getObjectByName('wire');if(w)w.material.opacity=.72*Math.max(0,1-p*1.6);}
+   if(currentMesh){currentMesh.material.uniforms.uAlpha.value=Math.max(0,(p-.25)/.75);currentMesh.scale.setScalar(.92+.08*e);}
+   updateTransitionFX(p,e);
+  }else if(mode==='wire-scan'){
+   if(oldMesh){oldMesh.material.uniforms.uAlpha.value=1-e;const w=oldMesh.getObjectByName('wire');if(w){w.visible=true;w.material.opacity=(1-p)*1.2;w.material.color.set(0xffffff);}}
+   if(currentMesh){currentMesh.material.uniforms.uAlpha.value=Math.min(1,p*1.25);const w=currentMesh.getObjectByName('wire');if(w){w.visible=true;w.material.opacity=Math.sin(Math.PI*p)*1.35+.18;w.material.color.copy(baseUniforms.fresnel);}currentMesh.scale.set(1,.82+.18*e,1);}
+  }else if(mode==='assemble'){
+   if(oldMesh)oldMesh.material.uniforms.uAlpha.value=Math.max(0,1-p*2.2);
+   if(currentMesh){currentMesh.material.uniforms.uAlpha.value=Math.max(0,(p-.55)/.45);currentMesh.scale.setScalar(.72+.28*e);}
+   updateTransitionFX(p,e);
+  }
+  if(p>=1){
+   disposeTransitionFX();
+   if(currentMesh){currentMesh.scale.set(1,1,1);currentMesh.material.uniforms.uAlpha.value=1;}
+   disposeModel(oldMesh);oldMesh=null;transitionState='idle';syncMaterials();
+   if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f),0);}
+  }
  }else if(transitionState==='in'){
   transitionTime+=dt;const p=Math.min(transitionTime/Math.max(state.transition/2,.05),1),e=ease(p);if(currentMesh)currentMesh.material.uniforms.uAlpha.value=e;
   if(p>=1){transitionState='idle';if(pending){const f=pending;pending=null;setTimeout(()=>loadSTL(f),0);}}
@@ -283,7 +356,7 @@ $('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();sa
 $('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveSoon();};
 $('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked;saveSoon();};
 $('gridToggle').onchange=e=>{grid.visible=e.target.checked;saveSoon();};$('showFloor').onchange=e=>{floor.visible=e.target.checked;saveSoon();};
-$('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveSoon();};$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
+$('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveSoon();};$('transitionMode').onchange=e=>{state.transitionMode=e.target.value;saveSoon();};$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
 
 $('envToggle').onchange=e=>{state.env=e.target.checked;envGroup.visible=state.env;saveSoon();};
 $('particlesToggle').onchange=e=>{state.particles=e.target.checked;particleGroup.visible=state.particles;saveSoon();};
@@ -304,7 +377,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 const KEY='stl-cinematic-settings-v2';let saveTimer;
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSettings,100);}
 function saveSettings(){
- const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionDuration','plInterval'];
+ const ids=['opacitySlider','fresnelToggle','fresnelPower','fresnelIntensity','fresnelColorPicker','autoRotateToggle','speedSlider','audioReactToggle','audioSens','envToggle','particlesToggle','ringsToggle','envReactToggle','envSpeed','particleDensity','envColorPicker','wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','transitionMode','transitionDuration','plInterval'];
  const d={axis:state.axis};ids.forEach(id=>{const e=$(id);d[id]=e.type==='checkbox'?e.checked:e.value;});try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
 }
 function restoreSettings(){
