@@ -26,7 +26,7 @@ label{display:flex;gap:7px;align-items:center;margin:5px 0;font-size:12px}input[
 #fileInput,#audioInput,#projectInput{display:none}#audioStatus{font-size:11px;color:#888;word-break:break-all}.playing{color:#0f8!important}
 #settingsToggle{display:none;position:fixed;right:14px;bottom:14px;z-index:50;width:52px;height:52px;border-radius:50%;border:1px solid #555;background:#15152b;color:#fff;font-size:22px}
 body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,body.preview-mode #info,body.preview-mode #settingsToggle{display:none!important}
-.pl-item[draggable="true"]{cursor:grab}.pl-item.dragging{opacity:.35}.pl-meta{font-size:10px;color:#7dd3fc;white-space:nowrap}
+.pl-item[draggable="true"]{cursor:grab;position:relative}.pl-item.dragging{opacity:.28;cursor:grabbing}.pl-item.drop-before:before,.pl-item.drop-after:after{content:"";position:absolute;left:4px;right:4px;height:2px;background:#7dd3fc;box-shadow:0 0 8px #7dd3fc;z-index:2}.pl-item.drop-before:before{top:-2px}.pl-item.drop-after:after{bottom:-2px}.pl-meta{font-size:10px;color:#7dd3fc;white-space:nowrap}
 @media(max-width:900px){#settingsToggle{display:block}#controls{display:none;top:auto;left:10px;right:10px;bottom:74px;width:auto;max-height:70vh}#controls.open{display:block}#ui{top:10px;left:10px}.btn{padding:8px 10px;font-size:12px}#playlist{top:auto;bottom:10px;left:10px;right:74px;transform:none;width:auto}#info{display:none}}
 </style>
 </head>
