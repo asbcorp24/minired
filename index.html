@@ -337,6 +337,24 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 </div><label><input id="wireframeToggle" type="checkbox">Wireframe поверх модели</label><label><input id="bloomToggle" type="checkbox" checked>Bloom</label><label><input id="dofToggle" type="checkbox" checked>Depth of field</label><label><input id="gridToggle" type="checkbox" checked>Сетка</label><label><input id="showFloor" type="checkbox" checked>Стеклянный пол</label><label><input id="doubleSided" type="checkbox" checked>Двусторонний рендер</label>
 <div>Bloom</div><input id="bloomStrength" type="range" min="0" max="3" step=".1" value="1.5">
 <div>Цвет модели</div><input id="colorPicker" type="color" value="#0088ff"><div>Фон</div><input id="bgColorPicker" type="color" value="#050510">
+<div style="margin-top:9px;font-weight:700">Сценический свет</div>
+<div>Key light <span id="keyLightIntensityValue" class="val">1.40</span></div>
+<input id="keyLightIntensity" type="range" min="0" max="8" step=".1" value="1.4">
+<div>Цвет Rim light</div><input id="rimLightColor" type="color" value="#00ffff">
+<div>Rim light <span id="rimLightIntensityValue" class="val">4.00</span></div>
+<input id="rimLightIntensity" type="range" min="0" max="12" step=".1" value="4">
+<label><input id="bottomLightToggle" type="checkbox">Подсветка снизу</label>
+<div>Нижний свет <span id="bottomLightIntensityValue" class="val">2.00</span></div>
+<input id="bottomLightIntensity" type="range" min="0" max="10" step=".1" value="2">
+<div>Цвет снизу</div><input id="bottomLightColor" type="color" value="#ff006e">
+<label><input id="rotatingLightToggle" type="checkbox">Вращающийся свет</label>
+<div>Вращающийся свет <span id="rotatingLightIntensityValue" class="val">3.00</span></div>
+<input id="rotatingLightIntensity" type="range" min="0" max="12" step=".1" value="3">
+<div>Скорость света <span id="rotatingLightSpeedValue" class="val">0.45</span></div>
+<input id="rotatingLightSpeed" type="range" min="-.2" max="2" step=".05" value=".45">
+<div>Радиус света <span id="rotatingLightRadiusValue" class="val">95</span></div>
+<input id="rotatingLightRadius" type="range" min="20" max="220" step="5" value="95">
+<div>Цвет вращающегося света</div><input id="rotatingLightColor" type="color" value="#66ccff">
 </div></details><details class="acc"><summary>Post FX</summary><div class="acc-body">
 <label><input id="fxChromatic" type="checkbox">Chromatic aberration</label>
 <div>Chromatic <span id="fxChromaticValue" class="val">0.0025</span></div>
