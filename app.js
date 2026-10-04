@@ -611,9 +611,12 @@ async function prepareNextImageTurn(nextIndex){
   const available=Math.max(.8,itemDuration-playlistTimer);
   const turnDuration=Math.min(Math.max(.8,state.cubeTurnDuration||2.2),Math.max(.8,available));
   const startQ=imageCube.quaternion.clone(),targetQ=faceQuaternionForStep(nextStep);
+  const sourceFace=cubeFaceIndex;
+  if(sourceFace!=null&&imageFacePlanes[sourceFace])imageFacePlanes[sourceFace].visible=true;
+  if(imageFacePlanes[nextFace])imageFacePlanes[nextFace].visible=true;
   cubeTransition={phase:'exitTurn',time:0,duration:turnDuration,
    from:imageCubeGroup.position.clone(),far:new THREE.Vector3(0,0,0),
-   startQ,targetQ,targetIndex:nextIndex,targetStep:nextStep,targetFace:nextFace};
+   startQ,targetQ,targetIndex:nextIndex,targetStep:nextStep,targetFace:nextFace,sourceFace};
   return true;
  }catch(err){console.error(err);return false;}
  finally{imageAdvancePreparing=false;}
@@ -1115,9 +1118,20 @@ function animate(){
    if(p>=1){imageCubeGroup.position.copy(cubeTransition.to);setCubeVisualAlpha(1);cubeTransition=null;}
   }else if(cubeTransition.phase==='exitTurn'||cubeTransition.phase==='manualTurn'){
    const style=state.cubeTransitionStyle;
-   if(style==='dissolve')setCubeVisualAlpha(1-Math.sin(Math.PI*p)*.92);
-   else if(style==='particles')setCubeVisualAlpha(.35+.65*Math.abs(Math.cos(Math.PI*p)));
-   else if(style==='holo'){setCubeVisualAlpha(.55+.45*Math.abs(Math.cos(Math.PI*p*4)));cubeEdges.material.opacity=Math.min(1,.75+Math.sin(p*Math.PI*10)*.2);}
+   // Keep image faces visible during a 90-degree turn. Fading the whole cube caused
+   // a visible black/empty frame while the edge was facing the camera.
+   imageFacePlanes.forEach(face=>{if(face.visible)face.material.opacity=1;});
+   glassMaterial.opacity=state.cubeGlassOpacity;
+   if(style==='dissolve'){
+    cubeEdges.material.opacity=.72+.18*Math.sin(Math.PI*p);
+   }else if(style==='particles'){
+    cubeEdges.material.opacity=.62+.28*Math.sin(Math.PI*p);
+   }else if(style==='holo'){
+    cubeEdges.material.opacity=Math.min(1,.72+.22*Math.sin(p*Math.PI*10));
+    glassMaterial.opacity=state.cubeGlassOpacity*(.82+.18*Math.abs(Math.cos(Math.PI*p*4)));
+   }else{
+    cubeEdges.material.opacity=.9;
+   }
 
    const retreatP=Math.min(1,p/.55),turnP=THREE.MathUtils.smoothstep(p,.08,.96);
    imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.far,ease(retreatP));
