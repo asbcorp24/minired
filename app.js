@@ -110,7 +110,7 @@ const cubeEdges=new THREE.LineSegments(
 );
 imageCube.add(cubeEdges);
 const imageFacePlanes=[];
-let imageObjectSides=4,imageObjectType='cube';
+let imageObjectSides=4,imageObjectType='cube',activeImageObjectSignature='';
 function defaultImageObject(){
  return {type:'cube',sides:6,radius:46,height:92,depth:36,fit:'contain',repeatFaces:false};
 }
@@ -123,6 +123,7 @@ function clearImageFacePlanes(){
 }
 function buildImageObjectGeometry(cfg=defaultImageObject(),preserveTexture=null){
  clearImageFacePlanes();
+ activeImageObjectSignature=JSON.stringify({type:cfg.type||'cube',sides:+cfg.sides||6,radius:+cfg.radius||46,height:+cfg.height||92,depth:+cfg.depth||36});
  imageObjectType=cfg.type||'cube';
  let sides=imageObjectType==='cube'||imageObjectType==='box'?4:Math.max(3,Math.min(24,Math.round(cfg.sides||6)));
  imageObjectSides=sides;
@@ -644,16 +645,17 @@ async function prepareNextImageTurn(nextIndex){
  imageAdvancePreparing=true;
  try{
   const nextCfg=ensureImageObject(item);const texture=await createFittedImageTexture(item.file,nextCfg.fit||state.imageFitMode);
-  const currentCfg=ensureImageObject(playlist[playlistIndex]);
-  if(JSON.stringify({type:currentCfg.type,sides:currentCfg.sides,radius:currentCfg.radius,height:currentCfg.height,depth:currentCfg.depth})!==JSON.stringify({type:nextCfg.type,sides:nextCfg.sides,radius:nextCfg.radius,height:nextCfg.height,depth:nextCfg.depth})){
-   buildImageObjectGeometry(nextCfg,null);cubeStep=0;cubeFaceIndex=0;
+  const desiredSig=JSON.stringify({type:nextCfg.type||'cube',sides:+nextCfg.sides||6,radius:+nextCfg.radius||46,height:+nextCfg.height||92,depth:+nextCfg.depth||36});
+  if(desiredSig!==activeImageObjectSignature){
+   const oldTex=imageFacePlanes.find(p=>p.visible&&p.material.map)?.material.map||null;
+   buildImageObjectGeometry(nextCfg,oldTex);cubeStep=0;cubeFaceIndex=0;
   }
   let dir=Math.random()<.5?-1:1;
   // Avoid long same-direction streaks, but keep the choice genuinely variable.
   if(dir===lastCubeTurn&&Math.random()<.65)dir=-dir;
   lastCubeTurn=dir;
   const nextStep=(cubeStep+dir+imageObjectSides)%imageObjectSides,sideFaces=imageSideFaces(),nextFace=sideFaces[nextStep];
-  setFaceTexture(nextFace,texture);
+  if(nextCfg.repeatFaces)imageFacePlanes.forEach((_,fi)=>setFaceTexture(fi,texture));else setFaceTexture(nextFace,texture);
   const itemDuration=playlist[playlistIndex]?.duration||playlistInterval;
   const available=Math.max(.8,itemDuration-playlistTimer);
   const turnDuration=Math.min(Math.max(.8,state.cubeTurnDuration||2.2),Math.max(.8,available));
@@ -759,7 +761,15 @@ async function showImageItem(file,{silent=true}={}){
  const hadSTL=!!currentMesh;
  if(!silent){$('loading').classList.add('active');$('info').textContent='⏳ Загрузка STL';}
  try{
-  const playlistItem=playlist.find(x=>x.file===file);const cfg=ensureImageObject(playlistItem);state.imageFitMode=cfg.fit||state.imageFitMode;const cached=playlistItem?consumePreloaded(playlistItem):null;const texture=cached||await createFittedImageTexture(file,state.imageFitMode),sideFaces=imageSideFaces();applyImagePalette(texture);
+  const playlistItem=playlist.find(x=>x.file===file);const cfg=ensureImageObject(playlistItem);state.imageFitMode=cfg.fit||state.imageFitMode;
+  const desiredSig=JSON.stringify({type:cfg.type||'cube',sides:+cfg.sides||6,radius:+cfg.radius||46,height:+cfg.height||92,depth:+cfg.depth||36});
+  if(imageCubeGroup.visible&&desiredSig!==activeImageObjectSignature){
+   const oldTex=imageFacePlanes.find(p=>p.visible&&p.material.map)?.material.map||null;
+   buildImageObjectGeometry(cfg,oldTex);
+  }else if(!imageCubeGroup.visible&&desiredSig!==activeImageObjectSignature){
+   buildImageObjectGeometry(cfg,null);
+  }
+  const cached=playlistItem?consumePreloaded(playlistItem):null;const texture=cached||await createFittedImageTexture(file,state.imageFitMode),sideFaces=imageSideFaces();applyImagePalette(texture);
   if(hadSTL){
    const preparedFace=sideFaces[0];
    cubeStep=0;cubeFaceIndex=preparedFace;if(cfg.repeatFaces)imageFacePlanes.forEach((_,fi)=>setFaceTexture(fi,texture));else setFaceTexture(preparedFace,texture);
@@ -979,7 +989,7 @@ function showPlaylistItem(item,{skipCubeExit=false}={}){
    $('info').textContent='✦ 3D-текст: '+obj.params.text;
   }
  }else if(item.type==='image'){
-  technicalGroup.visible=false;hideAllText();loadImageObjectUI(item);configureImageObjectForItem(item);state.cubeTransitionStyle=item.transition||state.cubeTransitionStyle;showImageItem(item.file,{silent:true});
+  technicalGroup.visible=false;hideAllText();loadImageObjectUI(item);if(!imageCubeGroup.visible)configureImageObjectForItem(item);state.cubeTransitionStyle=item.transition||state.cubeTransitionStyle;showImageItem(item.file,{silent:true});
  }else{
   hideAllText();state.transitionMode=item.transition||state.transitionMode;showSTLItem(item.file);
  }
@@ -1121,6 +1131,10 @@ async function runAutoDirector(){
   const sum=weights.reduce((a,b)=>a+b,0)||1;
   playlist.forEach((item,i)=>{
    item.duration=Math.max(2.5,total*weights[i]/sum);
+   if(item.type==='image'){
+    const shapes=['cube','box','prism','cylinder'],shape=shapes[i%shapes.length];
+    item.imageObject={...defaultImageObject(),...(item.imageObject||{}),type:shape,sides:shape==='cylinder'?16:shape==='prism'?6:4};
+   }
    if(item.type==='stl')item.transition=style.stl[i%style.stl.length];
    else if(item.type==='image')item.transition=style.image[i%style.image.length];
    else if(item.type==='corridor')item.transition='flow';
