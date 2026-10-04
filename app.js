@@ -77,6 +77,9 @@ const keyLight=new THREE.DirectionalLight(0xffffff,1.4);keyLight.position.set(1,
 const rim1=new THREE.PointLight(0xff006e,4,400);rim1.position.set(-80,40,-80);scene.add(rim1);
 const rim2=new THREE.PointLight(0x00ffff,4,400);rim2.position.set(80,-30,80);scene.add(rim2);
 const innerLight=new THREE.PointLight(0xffffff,2,200);scene.add(innerLight);
+const bottomLight=new THREE.PointLight(0xff006e,0,260);bottomLight.position.set(0,-85,0);scene.add(bottomLight);
+const rotatingLight=new THREE.PointLight(0x66ccff,0,320);rotatingLight.position.set(95,35,0);scene.add(rotatingLight);
+let rotatingLightAngle=0;
 
 const grid=new THREE.GridHelper(400,40,0x3366ff,0x112244);
 grid.material.transparent=true;grid.material.opacity=.3;grid.material.depthWrite=false;scene.add(grid);
@@ -933,12 +936,12 @@ function updateCorridor(dt,t){
   controls.target.set(Math.sin(corridorPhase*.55)*p.bend*.28,Math.cos(corridorPhase*.42)*p.bend*.16,-120);controls.update();
  }
 }
-const appearanceIds=['wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker'];
+const appearanceIds=['wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker','keyLightIntensity','rimLightColor','rimLightIntensity','bottomLightToggle','bottomLightIntensity','bottomLightColor','rotatingLightToggle','rotatingLightIntensity','rotatingLightSpeed','rotatingLightRadius','rotatingLightColor'];
 function captureAppearance(){
  const o={};appearanceIds.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
 }
 function defaultAppearance(){
- return {wireframeToggle:false,bloomToggle:true,dofToggle:true,gridToggle:true,showFloor:true,doubleSided:true,bloomStrength:'1.5',colorPicker:'#0088ff',bgColorPicker:'#050510'};
+ return {wireframeToggle:false,bloomToggle:true,dofToggle:true,gridToggle:true,showFloor:true,doubleSided:true,bloomStrength:'1.5',colorPicker:'#0088ff',bgColorPicker:'#050510',keyLightIntensity:'1.4',rimLightColor:'#00ffff',rimLightIntensity:'4',bottomLightToggle:false,bottomLightIntensity:'2',bottomLightColor:'#ff006e',rotatingLightToggle:false,rotatingLightIntensity:'3',rotatingLightSpeed:'.45',rotatingLightRadius:'95',rotatingLightColor:'#66ccff'};
 }
 function applyAppearance(o){
  const a={...defaultAppearance(),...(o||{})};
@@ -951,7 +954,23 @@ function applyAppearance(o){
  if($('bloomStrength'))$('bloomStrength').value=a.bloomStrength;
  if($('colorPicker'))$('colorPicker').value=a.colorPicker;
  if($('bgColorPicker'))$('bgColorPicker').value=a.bgColorPicker;
+ if($('keyLightIntensity'))$('keyLightIntensity').value=a.keyLightIntensity;
+ if($('rimLightColor'))$('rimLightColor').value=a.rimLightColor;
+ if($('rimLightIntensity'))$('rimLightIntensity').value=a.rimLightIntensity;
+ if($('bottomLightToggle'))$('bottomLightToggle').checked=!!a.bottomLightToggle;
+ if($('bottomLightIntensity'))$('bottomLightIntensity').value=a.bottomLightIntensity;
+ if($('bottomLightColor'))$('bottomLightColor').value=a.bottomLightColor;
+ if($('rotatingLightToggle'))$('rotatingLightToggle').checked=!!a.rotatingLightToggle;
+ if($('rotatingLightIntensity'))$('rotatingLightIntensity').value=a.rotatingLightIntensity;
+ if($('rotatingLightSpeed'))$('rotatingLightSpeed').value=a.rotatingLightSpeed;
+ if($('rotatingLightRadius'))$('rotatingLightRadius').value=a.rotatingLightRadius;
+ if($('rotatingLightColor'))$('rotatingLightColor').value=a.rotatingLightColor;
  state.wire=!!a.wireframeToggle;state.doubleSide=!!a.doubleSided;
+ keyLight.intensity=+a.keyLightIntensity||0;
+ rim1.color.set(a.rimLightColor||'#00ffff');rim2.color.set(a.rimLightColor||'#00ffff');
+ rim1.intensity=+a.rimLightIntensity||0;rim2.intensity=+a.rimLightIntensity||0;
+ bottomLight.color.set(a.bottomLightColor||'#ff006e');bottomLight.intensity=a.bottomLightToggle?(+a.bottomLightIntensity||0):0;
+ rotatingLight.color.set(a.rotatingLightColor||'#66ccff');rotatingLight.intensity=a.rotatingLightToggle?(+a.rotatingLightIntensity||0):0;
  bloomPass.enabled=!!a.bloomToggle;bokehPass.enabled=!!a.dofToggle&&!imageCubeGroup.visible;
  grid.visible=!!a.gridToggle;floor.visible=!!a.showFloor;bloomPass.strength=+a.bloomStrength||1.5;
  baseUniforms.color.set(a.colorPicker||'#0088ff');scene.background.set(a.bgColorPicker||'#050510');scene.fog.color.set(a.bgColorPicker||'#050510');
@@ -1536,6 +1555,14 @@ function animate(){
   bokehPass.enabled=$('dofToggle').checked;
  }
  updateCorridor(dt,t);
+ const activeAppearance=currentPlaylistItem()?.appearance||defaultAppearance();
+ if(activeAppearance.rotatingLightToggle){
+  rotatingLightAngle+=dt*(+activeAppearance.rotatingLightSpeed||.45);
+  const rr=+activeAppearance.rotatingLightRadius||95;
+  rotatingLight.position.set(Math.cos(rotatingLightAngle)*rr,35+Math.sin(rotatingLightAngle*.7)*28,Math.sin(rotatingLightAngle)*rr);
+  rotatingLight.intensity=+activeAppearance.rotatingLightIntensity||0;
+ }else rotatingLight.intensity=0;
+ bottomLight.position.set(0,-80,0);
  const recPerf=(stereoRecording&&$('stereoPerformanceMode')?.checked)||(normalRecording&&$('recordPerformanceMode')?.checked);
  if(recPerf){recordPreviewFrame++;if(recordPreviewFrame%2===0)renderer.render(scene,camera);}else composer.render();
  const now=performance.now();renderStereoFrame(now);renderNormalRecordFrame(now);
@@ -1686,6 +1713,28 @@ $('applyScenePreset').onclick=()=>applyScenePresetByName($('scenePreset').value)
 const onScenePreset=e=>{state.scenePreset=e.target.value;};$('scenePreset').onchange=onScenePreset;$('scenePreset').oninput=onScenePreset;
 $('saveCustomPreset').onclick=()=>{customScenePreset={bg:'#'+scene.background.getHexString(),fog:'#'+scene.fog.color.getHexString(),bloom:bloomPass.strength,model:'#'+baseUniforms.color.getHexString(),edge:$('cubeEdgeColor').value,env:$('envColorPicker').value,floor:floor.visible,grid:grid.visible,particles:particleGroup.visible,rings:ringGroup.visible,grade:state.gradePreset,glass:$('cubeGlassColor').value,glassOpacity:state.cubeGlassOpacity};state.scenePreset='custom';$('scenePreset').value='custom';saveSoon();$('info').textContent='💾 Custom scene preset сохранён';};
 
+function updateStageLightingFromUI(){
+ keyLight.intensity=+($('keyLightIntensity')?.value||0);
+ const rc=$('rimLightColor')?.value||'#00ffff';rim1.color.set(rc);rim2.color.set(rc);
+ const ri=+($('rimLightIntensity')?.value||0);rim1.intensity=ri;rim2.intensity=ri;
+ bottomLight.color.set($('bottomLightColor')?.value||'#ff006e');
+ bottomLight.intensity=$('bottomLightToggle')?.checked?(+($('bottomLightIntensity')?.value||0)):0;
+ rotatingLight.color.set($('rotatingLightColor')?.value||'#66ccff');
+ rotatingLight.intensity=$('rotatingLightToggle')?.checked?(+($('rotatingLightIntensity')?.value||0)):0;
+ saveAppearanceForCurrent();saveSoon();
+}
+$('keyLightIntensity').oninput=e=>{setText('keyLightIntensityValue',(+e.target.value).toFixed(2));updateStageLightingFromUI();};
+$('rimLightColor').oninput=updateStageLightingFromUI;
+$('rimLightIntensity').oninput=e=>{setText('rimLightIntensityValue',(+e.target.value).toFixed(2));updateStageLightingFromUI();};
+$('bottomLightToggle').onchange=updateStageLightingFromUI;
+$('bottomLightIntensity').oninput=e=>{setText('bottomLightIntensityValue',(+e.target.value).toFixed(2));updateStageLightingFromUI();};
+$('bottomLightColor').oninput=updateStageLightingFromUI;
+$('rotatingLightToggle').onchange=updateStageLightingFromUI;
+$('rotatingLightIntensity').oninput=e=>{setText('rotatingLightIntensityValue',(+e.target.value).toFixed(2));updateStageLightingFromUI();};
+$('rotatingLightSpeed').oninput=e=>{setText('rotatingLightSpeedValue',(+e.target.value).toFixed(2));updateStageLightingFromUI();};
+$('rotatingLightRadius').oninput=e=>{setText('rotatingLightRadiusValue',Math.round(+e.target.value));updateStageLightingFromUI();};
+$('rotatingLightColor').oninput=updateStageLightingFromUI;
+
 $('appearanceCopyAll').onclick=()=>{const a=captureAppearance();playlist.forEach(item=>item.appearance={...a});$('info').textContent='🎨 Внешний вид применён ко всем элементам';saveSoon();};
 $('appearanceResetCurrent').onclick=resetCurrentAppearance;
 
@@ -1727,7 +1776,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 $('previewBtn').onclick=()=>{document.body.classList.toggle('preview-mode');};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.classList.remove('preview-mode');});
 $('saveProjectBtn').onclick=()=>{
- const payload={version:6,state:{...state},customScenePreset,settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,appearance:x.appearance?{...x.appearance}:undefined,imageObject:x.imageObject?{...x.imageObject}:undefined,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
+ const payload={version:7,state:{...state},customScenePreset,settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,appearance:x.appearance?{...x.appearance}:undefined,imageObject:x.imageObject?{...x.imageObject}:undefined,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=u;a.download='minired-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
