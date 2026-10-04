@@ -283,6 +283,28 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <label><input id="stereoSwapEyes" type="checkbox">Поменять L/R местами</label>
 <label><input id="stereoPerformanceMode" type="checkbox" checked>Оптимизировать предпросмотр при записи</label>
 
+</div></details><details class="acc"><summary>Камера объекта</summary><div class="acc-body">
+<div style="font-size:10px;color:#7dd3fc;margin:5px 0 8px">Сохраняется отдельно для текущего элемента плейлиста.</div>
+<div>Стиль камеры</div>
+<select id="objectCameraMode">
+<option value="orbit-slow">Orbit slow</option>
+<option value="hero-push-in">Hero push-in</option>
+<option value="side-sweep">Side sweep</option>
+<option value="low-angle-rise">Low-angle rise</option>
+<option value="top-down-reveal">Top-down reveal</option>
+<option value="tunnel-fly">Tunnel fly</option>
+<option value="static-cinematic" selected>Static cinematic</option>
+</select>
+<div>Скорость <span id="objectCameraSpeedValue" class="val">1.00</span></div>
+<input id="objectCameraSpeed" type="range" min="0" max="3" step=".05" value="1">
+<div>Радиус <span id="objectCameraRadiusValue" class="val">120</span></div>
+<input id="objectCameraRadius" type="range" min="10" max="250" step="1" value="120">
+<div>Высота <span id="objectCameraHeightValue" class="val">35</span></div>
+<input id="objectCameraHeight" type="range" min="-50" max="150" step="1" value="35">
+<div>Target Y <span id="objectCameraTargetYValue" class="val">0</span></div>
+<input id="objectCameraTargetY" type="range" min="-80" max="80" step="1" value="0">
+<div>Сила <span id="objectCameraStrengthValue" class="val">1.00</span></div>
+<input id="objectCameraStrength" type="range" min="0" max="2" step=".05" value="1">
 </div></details><details class="acc"><summary>Авто-камера STL</summary><div class="acc-body">
 <select id="cameraPreset">
 <option value="auto">Auto — лучший ракурс</option>
@@ -355,6 +377,24 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div>Радиус света <span id="rotatingLightRadiusValue" class="val">95</span></div>
 <input id="rotatingLightRadius" type="range" min="20" max="220" step="5" value="95">
 <div>Цвет вращающегося света</div><input id="rotatingLightColor" type="color" value="#66ccff">
+<div style="margin-top:10px;font-weight:700">Архитектура сцены</div>
+<label><input id="archColumnsToggle" type="checkbox">Световые колонны</label>
+<div>Колонны <span id="archColumnsCountValue" class="val">8</span></div>
+<input id="archColumnsCount" type="range" min="0" max="24" step="1" value="8">
+<label><input id="archPanelsToggle" type="checkbox">Голографические панели</label>
+<div>Панели <span id="archPanelsCountValue" class="val">6</span></div>
+<input id="archPanelsCount" type="range" min="0" max="20" step="1" value="6">
+<label><input id="archArchesToggle" type="checkbox">Сеточные арки</label>
+<div>Арки <span id="archArchesCountValue" class="val">4</span></div>
+<input id="archArchesCount" type="range" min="0" max="12" step="1" value="4">
+<label><input id="archFramesToggle" type="checkbox">Wireframe-фреймы</label>
+<div>Фреймы <span id="archFramesCountValue" class="val">10</span></div>
+<input id="archFramesCount" type="range" min="0" max="30" step="1" value="10">
+<div>Цвет архитектуры</div><input id="archColor" type="color" value="#00ffff">
+<div>Интенсивность <span id="archIntensityValue" class="val">1.00</span></div>
+<input id="archIntensity" type="range" min="0" max="4" step=".05" value="1">
+<label><input id="archAudioReact" type="checkbox" checked>Реакция на музыку</label>
+<label><input id="archDrift" type="checkbox" checked>Плавный дрейф</label>
 </div></details><details class="acc"><summary>Post FX</summary><div class="acc-body">
 <label><input id="fxChromatic" type="checkbox">Chromatic aberration</label>
 <div>Chromatic <span id="fxChromaticValue" class="val">0.0025</span></div>
