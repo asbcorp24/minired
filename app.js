@@ -570,10 +570,11 @@ function faceCubeGroupToCamera(){
  imageCubeGroup.lookAt(camera.position);
  cubeFacingQ.copy(imageCubeGroup.quaternion);
 }
-function startCubeApproach(){
+function startCubeApproach(preserveVisible=false){
  faceCubeGroupToCamera();
+ if(preserveVisible)setCubeVisualAlpha(1);
  cubeTransition={phase:'approach',time:0,duration:Math.max(.35,Math.min(1.2,playlistInterval*.10)),
-  from:imageCubeGroup.position.clone(),to:cubeNearPosition()};
+  from:imageCubeGroup.position.clone(),to:cubeNearPosition(),preserveVisible};
 }
 function setFaceTexture(faceIndex,texture){
  const face=imageFacePlanes[faceIndex],mat=face.material;
@@ -1114,7 +1115,7 @@ function animate(){
   const p=Math.min(cubeTransition.time/Math.max(.05,cubeTransition.duration),1),e=ease(p);
   if(cubeTransition.phase==='approach'){
    imageCubeGroup.position.lerpVectors(cubeTransition.from,cubeTransition.to,e);
-   setCubeVisualAlpha(e);
+   if(cubeTransition.preserveVisible)setCubeVisualAlpha(1);else setCubeVisualAlpha(e);
    if(p>=1){imageCubeGroup.position.copy(cubeTransition.to);setCubeVisualAlpha(1);cubeTransition=null;}
   }else if(cubeTransition.phase==='exitTurn'||cubeTransition.phase==='manualTurn'){
    const style=state.cubeTransitionStyle;
@@ -1144,7 +1145,7 @@ function animate(){
      playlistIndex=targetIndex;playlistTimer=0;renderPlaylist();preloadItem((playlistIndex+1)%playlist.length);showLabel(playlist[playlistIndex].name);
      $('info').textContent='🖼 '+playlist[playlistIndex].name;
     }
-    startCubeApproach();
+    startCubeApproach(true);
    }
   }
  }
