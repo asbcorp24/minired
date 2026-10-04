@@ -312,7 +312,12 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div>Скорость <span id="envSpeedValue" class="val">1.0</span></div><input id="envSpeed" type="range" min=".1" max="3" step=".1" value="1">
 <div>Частицы <span id="particleDensityValue" class="val">1000</span></div><input id="particleDensity" type="range" min="200" max="4000" step="100" value="1000"><input id="envColorPicker" type="color" value="#ff006e">
 
-</div></details><details class="acc"><summary>Внешний вид</summary><div class="acc-body"><label><input id="wireframeToggle" type="checkbox">Wireframe поверх модели</label><label><input id="bloomToggle" type="checkbox" checked>Bloom</label><label><input id="dofToggle" type="checkbox" checked>Depth of field</label><label><input id="gridToggle" type="checkbox" checked>Сетка</label><label><input id="showFloor" type="checkbox" checked>Стеклянный пол</label><label><input id="doubleSided" type="checkbox" checked>Двусторонний рендер</label>
+</div></details><details class="acc"><summary>Внешний вид</summary><div class="acc-body">
+<div style="font-size:10px;color:#7dd3fc;margin:5px 0 8px">Настройки сохраняются отдельно для текущего элемента плейлиста.</div>
+<div class="row" style="margin-bottom:7px">
+<div class="mini" id="appearanceCopyAll">Применить ко всем</div>
+<div class="mini" id="appearanceResetCurrent">Сбросить текущий</div>
+</div><label><input id="wireframeToggle" type="checkbox">Wireframe поверх модели</label><label><input id="bloomToggle" type="checkbox" checked>Bloom</label><label><input id="dofToggle" type="checkbox" checked>Depth of field</label><label><input id="gridToggle" type="checkbox" checked>Сетка</label><label><input id="showFloor" type="checkbox" checked>Стеклянный пол</label><label><input id="doubleSided" type="checkbox" checked>Двусторонний рендер</label>
 <div>Bloom</div><input id="bloomStrength" type="range" min="0" max="3" step=".1" value="1.5">
 <div>Цвет модели</div><input id="colorPicker" type="color" value="#0088ff"><div>Фон</div><input id="bgColorPicker" type="color" value="#050510">
 </div></details><details class="acc"><summary>Post FX</summary><div class="acc-body">
