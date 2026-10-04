@@ -132,7 +132,7 @@ function faceQuaternionForStep(step){
  return q;
 }
 
-const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,cubeTurnDuration:2.2,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false,corridorAudioReact:true,corridorLength:320,corridorRadius:22,corridorSpeed:28,corridorBend:24,corridorTwist:.9,corridorSegments:96,corridorColor:'#00ffff',corridorStyle:'neon',corridorPulse:true,corridorParticles:true};
+const state={wire:false,doubleSide:true,autoRotate:true,axis:'y',speed:1,rotPaused:false,transition:1.5,transitionMode:'crossfade',env:true,particles:true,rings:true,envReact:true,envSpeed:1,audioReact:true,audioSens:1,cubeSpinSpeed:.3,cubeTurnDuration:2.2,objectScale:1,imageFitMode:'contain',cubeTransitionStyle:'fly-turn',cubeHoldPercent:60,cubeNearDistance:58,cubeFarDistance:280,cubeSway:.4,cubeGlassOpacity:.13,cubeEdgeIntensity:1,cubeBassEdges:true,cubeEdgeSweep:true,cameraDolly:true,autoPalette:true,typeTransitionStyle:'fly-dissolve',preload:true,parallax:true,gradePreset:'none',scenePreset:'custom',autoCameraEach:false,technicalMode:false,corridorAudioReact:true,corridorLength:320,corridorRadius:22,corridorSpeed:28,corridorBend:24,corridorTwist:.9,corridorSegments:96,corridorColor:'#00ffff',corridorStyle:'neon',corridorShape:'circle',corridorDensity:1,corridorLineWidth:1,corridorShapeWave:.18,corridorSectionSpin:.45,corridorPulse:true,corridorParticles:true};
 
 const gradePresets={
  none:{contrast:1,saturation:1,temperature:0,tint:0,exposure:1.05},
@@ -724,7 +724,7 @@ async function showImageItem(file,{silent=true}={}){
  }
  if(!silent)$('loading').classList.remove('active');
 }
-let corridorGroup=null,corridorRings=[],corridorParticlesObj=null,corridorTravel=0,corridorPhase=0,corridorActive=false,corridorLastQuality=0;
+let corridorGroup=null,corridorRings=[],corridorParticlesObj=null,corridorTravel=0,corridorPhase=0,corridorActive=false,corridorLastQuality=0,corridorCameraState=null;
 function corridorSettingsFromUI(){
  return {
   audioReact:$('corridorAudioReact')?.checked!==false,
@@ -736,17 +736,23 @@ function corridorSettingsFromUI(){
   segments:+($('corridorSegments')?.value||96),
   color:$('corridorColor')?.value||'#00ffff',
   style:$('corridorStyle')?.value||'neon',
+  shape:$('corridorShape')?.value||'circle',
+  density:+($('corridorDensity')?.value||1),
+  lineWidth:+($('corridorLineWidth')?.value||1),
+  shapeWave:+($('corridorShapeWave')?.value||.18),
+  sectionSpin:+($('corridorSectionSpin')?.value||.45),
   pulse:$('corridorPulse')?.checked!==false,
   particles:$('corridorParticles')?.checked!==false
  };
 }
 function syncCorridorState(){
  const p=corridorSettingsFromUI();
- Object.assign(state,{corridorAudioReact:p.audioReact,corridorLength:p.length,corridorRadius:p.radius,corridorSpeed:p.speed,corridorBend:p.bend,corridorTwist:p.twist,corridorSegments:p.segments,corridorColor:p.color,corridorStyle:p.style,corridorPulse:p.pulse,corridorParticles:p.particles});
+ Object.assign(state,{corridorAudioReact:p.audioReact,corridorLength:p.length,corridorRadius:p.radius,corridorSpeed:p.speed,corridorBend:p.bend,corridorTwist:p.twist,corridorSegments:p.segments,corridorColor:p.color,corridorStyle:p.style,corridorShape:p.shape,corridorDensity:p.density,corridorLineWidth:p.lineWidth,corridorShapeWave:p.shapeWave,corridorSectionSpin:p.sectionSpin,corridorPulse:p.pulse,corridorParticles:p.particles});
  return p;
 }
-function disposeCorridor(){
+function disposeCorridor(restoreCamera=true){
  corridorActive=false;
+ if(restoreCamera&&corridorCameraState){camera.position.copy(corridorCameraState.position);camera.quaternion.copy(corridorCameraState.quaternion);controls.target.copy(corridorCameraState.target);controls.enabled=corridorCameraState.controlsEnabled;controls.update();corridorCameraState=null;}
  if(!corridorGroup)return;
  corridorGroup.traverse(o=>{
   o.geometry?.dispose?.();
@@ -754,17 +760,35 @@ function disposeCorridor(){
  });
  scene.remove(corridorGroup);corridorGroup=null;corridorRings=[];corridorParticlesObj=null;corridorLastQuality=0;
 }
+function corridorShapePoints(shape,sides=16){
+ const pts=[];
+ const add=(x,y)=>pts.push(new THREE.Vector3(x,y,0));
+ if(shape==='square'){
+  [[1,1],[-1,1],[-1,-1],[1,-1],[1,1]].forEach(p=>add(p[0],p[1]));
+ }else if(shape==='diamond'){
+  [[0,1],[1,0],[0,-1],[-1,0],[0,1]].forEach(p=>add(p[0],p[1]));
+ }else if(shape==='hex'||shape==='oct'){
+  const n=shape==='hex'?6:8;for(let i=0;i<=n;i++){const a=i/n*Math.PI*2;add(Math.cos(a),Math.sin(a));}
+ }else if(shape==='star'){
+  const n=10;for(let i=0;i<=n;i++){const a=i/n*Math.PI*2-Math.PI/2,r=i%2===0?1:.48;add(Math.cos(a)*r,Math.sin(a)*r);}
+ }else if(shape==='rounded-square'){
+  const n=Math.max(16,sides),pow=4;for(let i=0;i<=n;i++){const a=i/n*Math.PI*2,c=Math.cos(a),d=Math.sin(a);const x=Math.sign(c)*Math.pow(Math.abs(c),2/pow),y=Math.sign(d)*Math.pow(Math.abs(d),2/pow);add(x,y);}
+ }else{
+  const n=Math.max(12,sides);for(let i=0;i<=n;i++){const a=i/n*Math.PI*2;add(Math.cos(a),Math.sin(a));}
+ }
+ return pts;
+}
 function buildCorridor(force=false){
  const p=syncCorridorState(),recording=normalRecording||stereoRecording;
- const ringCount=Math.max(22,Math.min(recording?40:72,Math.round(p.segments*.58)));
- const sides=recording?12:16,quality=ringCount*100+sides;
+ const ringCount=Math.max(18,Math.min(recording?42:96,Math.round(p.segments*.58*p.density)));
+ const sides=recording?12:18,quality=ringCount*100+sides+Math.round(p.density*10);
  if(!force&&corridorGroup&&corridorLastQuality===quality)return;
- disposeCorridor();corridorLastQuality=quality;corridorGroup=new THREE.Group();corridorGroup.name='corridor';
+ disposeCorridor(false);corridorLastQuality=quality;corridorGroup=new THREE.Group();corridorGroup.name='corridor';
  const baseColor=new THREE.Color(p.color);
- const pts=[];for(let j=0;j<sides;j++){const a=j/sides*Math.PI*2;pts.push(new THREE.Vector3(Math.cos(a),Math.sin(a),0));}pts.push(pts[0].clone());
+ const pts=corridorShapePoints(p.shape,sides);
  for(let i=0;i<ringCount;i++){
   const g=new THREE.BufferGeometry().setFromPoints(pts);
-  const mat=new THREE.LineBasicMaterial({color:baseColor,transparent:true,opacity:p.style==='blueprint'?.62:.82,depthWrite:false,blending:p.style==='neon'?THREE.AdditiveBlending:THREE.NormalBlending});
+  const mat=new THREE.LineBasicMaterial({color:baseColor,transparent:true,opacity:p.style==='blueprint'?.62:.82,depthWrite:false,blending:p.style==='neon'?THREE.AdditiveBlending:THREE.NormalBlending,linewidth:p.lineWidth});
   const line=new THREE.Line(g,mat),holder=new THREE.Group();holder.add(line);holder.userData.index=i;holder.userData.line=line;corridorGroup.add(holder);corridorRings.push(holder);
  }
  const particleCount=recording?140:300,pa=new Float32Array(particleCount*3);
@@ -783,6 +807,7 @@ function corridorCenterAt(d,p){
  );
 }
 function showCorridorItem(item){
+ if(!corridorCameraState)corridorCameraState={position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),controlsEnabled:controls.enabled};
  technicalGroup.visible=false;hideAllText();hideImageCube();disposeTransitionFX();disposeModel(currentMesh);disposeModel(oldMesh);
  currentMesh=oldMesh=null;transitionState='idle';hideLabel();currentContentType='corridor';corridorTravel=0;corridorPhase=0;
  buildCorridor(true);camera.position.set(0,0,24);controls.target.set(0,0,-120);controls.update();$('info').textContent='🌀 Музыкальный коридор';
@@ -790,7 +815,7 @@ function showCorridorItem(item){
 function updateCorridor(dt,t){
  if(!corridorActive||!corridorGroup)return;
  const p=syncCorridorState(),recording=normalRecording||stereoRecording;
- const desired=Math.max(22,Math.min(recording?40:72,Math.round(p.segments*.58)))*100+(recording?12:16);
+ const desired=Math.max(18,Math.min(recording?42:96,Math.round(p.segments*.58*p.density)))*100+(recording?12:18)+Math.round(p.density*10);
  if(desired!==corridorLastQuality)buildCorridor(true);
  const react=p.audioReact&&state.audioReact,bb=react?bass:0,mm=react?mid:0,hh=react?high:0;
  corridorTravel=(corridorTravel+dt*p.speed*(1+bb*.85))%Math.max(1,p.length);
@@ -801,8 +826,10 @@ function updateCorridor(dt,t){
   const c=corridorCenterAt(d,p),n=corridorCenterAt(Math.min(p.length,d+1.2),p),dir=n.sub(c).normalize();
   holder.position.copy(c);tmpQ.setFromUnitVectors(zAxis,dir);holder.quaternion.copy(tmpQ);
   const pulse=p.pulse?(Math.sin(d*.16-corridorPhase*5)*.5+.5):0;
-  const radius=p.radius*(1+bb*.12+mm*.04)+pulse*(1.2+bb*3.2);
+  const wave=1+p.shapeWave*Math.sin(d*.055+corridorPhase*2.1)+bb*.12+mm*.04;
+  const radius=p.radius*wave+pulse*(1.2+bb*3.2);
   holder.scale.set(radius,radius,1);
+  holder.rotateZ((d/Math.max(1,p.length))*Math.PI*2*p.sectionSpin+Math.sin(corridorPhase+d*.01)*p.twist*.08);
   const line=holder.userData.line,fade=THREE.MathUtils.clamp(1-d/p.length,.12,1);
   line.material.opacity=(p.style==='blueprint'?.45:.62)+fade*.25+bb*.16+pulse*(p.style==='neon'?.18:.06);
   line.material.color.set(p.color);
@@ -1421,6 +1448,11 @@ $('corridorBend').oninput=e=>{state.corridorBend=+e.target.value;setText('corrid
 $('corridorTwist').oninput=e=>{state.corridorTwist=+e.target.value;setText('corridorTwistValue',state.corridorTwist.toFixed(2));saveSoon();};
 $('corridorSegments').oninput=e=>{state.corridorSegments=+e.target.value;setText('corridorSegmentsValue',Math.round(state.corridorSegments));rebuildCorridorFromUI();};
 $('corridorColor').oninput=e=>{state.corridorColor=e.target.value;saveSoon();};
+$('corridorShape').onchange=e=>{state.corridorShape=e.target.value;rebuildCorridorFromUI();};
+$('corridorDensity').oninput=e=>{state.corridorDensity=+e.target.value;setText('corridorDensityValue',state.corridorDensity.toFixed(2));rebuildCorridorFromUI();};
+$('corridorLineWidth').oninput=e=>{state.corridorLineWidth=+e.target.value;setText('corridorLineWidthValue',state.corridorLineWidth.toFixed(1));rebuildCorridorFromUI();};
+$('corridorShapeWave').oninput=e=>{state.corridorShapeWave=+e.target.value;setText('corridorShapeWaveValue',state.corridorShapeWave.toFixed(2));saveSoon();};
+$('corridorSectionSpin').oninput=e=>{state.corridorSectionSpin=+e.target.value;setText('corridorSectionSpinValue',state.corridorSectionSpin.toFixed(2));saveSoon();};
 $('corridorStyle').onchange=e=>{state.corridorStyle=e.target.value;rebuildCorridorFromUI();};
 $('corridorPulse').onchange=e=>{state.corridorPulse=e.target.checked;saveSoon();};
 $('corridorParticles').onchange=e=>{state.corridorParticles=e.target.checked;if(corridorParticlesObj)corridorParticlesObj.visible=e.target.checked;saveSoon();};
@@ -1563,7 +1595,7 @@ $('resetCinemaBtn').onclick=()=>{
  glassMaterial.opacity=state.cubeGlassOpacity;saveSoon();
 };
 function saveSettingsSnapshot(){
- const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits','stereoRecord','stereoEyeSep','stereoFocus','stereoResolution','stereoFps','stereoBitrate','stereoSwapEyes','stereoPerformanceMode','recordResolution','recordFps','recordBitrate','recordPerformanceMode','cubeTurnDuration','directorStyle','directorEnergy','directorUseMusic','directorInterleave','directorAutoCamera','directorPostFx','directorDuration','corridorAudioReact','corridorLength','corridorRadius','corridorSpeed','corridorBend','corridorTwist','corridorSegments','corridorColor','corridorStyle','corridorPulse','corridorParticles'];
+ const ids=['cubeSpinSpeed','imageFitMode','cubeTransitionStyle','cubeHoldPercent','cubeNearDistance','cubeFarDistance','cubeSway','cubeGlassOpacity','cubeEdgeIntensity','cubeBassEdges','cubeEdgeSweep','cameraDolly','autoPalette','cubeGlassColor','cubeEdgeColor','typeTransitionStyle','preloadToggle','parallaxToggle','objectScale','transitionMode','transitionDuration','plInterval','fxChromatic','fxChromaticAmount','fxVignette','fxVignetteAmount','fxFilm','fxFilmAmount','fxScanlines','fxScanlinesAmount','fxGlitch','fxGlitchAmount','fxRgb','fxRgbAmount','fxMotion','fxMotionAmount','fxGrading','gradeContrast','gradeSaturation','gradeTemperature','gradeTint','gradePreset','scenePreset','cameraPreset','technicalMode','technicalWireframe','technicalDimensions','technicalAxes','technicalGrid','technicalLabels','technicalUnits','stereoRecord','stereoEyeSep','stereoFocus','stereoResolution','stereoFps','stereoBitrate','stereoSwapEyes','stereoPerformanceMode','recordResolution','recordFps','recordBitrate','recordPerformanceMode','cubeTurnDuration','directorStyle','directorEnergy','directorUseMusic','directorInterleave','directorAutoCamera','directorPostFx','directorDuration','corridorAudioReact','corridorLength','corridorRadius','corridorSpeed','corridorBend','corridorTwist','corridorSegments','corridorColor','corridorStyle','corridorShape','corridorDensity','corridorLineWidth','corridorShapeWave','corridorSectionSpin','corridorPulse','corridorParticles'];
  const o={};ids.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
 }
 function applySettingsSnapshot(o){Object.entries(o||{}).forEach(([id,v])=>{const e=$(id);if(!e)return;if(e.type==='checkbox'){e.checked=!!v;e.dispatchEvent(new Event('change'));}else{e.value=v;e.dispatchEvent(new Event('input'));e.dispatchEvent(new Event('change'));}});}
