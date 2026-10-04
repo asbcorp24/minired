@@ -83,7 +83,24 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div>Скорость <span id="speedValue" class="val">1.0</span>x <span id="directionLabel">↻</span></div><input id="speedSlider" type="range" min="-3" max="3" step=".1" value="1">
 <div class="row"><div class="mini" id="reverseBtn">🔄 Реверс</div><div class="mini" id="pauseRotBtn">⏸</div></div>
 
-</div></details><details class="acc"><summary>Куб с изображениями</summary><div class="acc-body">
+</div></details><details class="acc"><summary>Фото 3D-объект</summary><div class="acc-body">
+<div style="font-size:10px;color:#7dd3fc;margin:5px 0 8px">Форма сохраняется отдельно для каждого фото.</div>
+<div>Фигура</div>
+<select id="imageObjectType">
+<option value="cube">Cube</option>
+<option value="box">Box</option>
+<option value="prism">Prism</option>
+<option value="cylinder">Segmented Cylinder</option>
+</select>
+<div>Грани / сегменты <span id="imageObjectSidesValue" class="val">6</span></div>
+<input id="imageObjectSides" type="range" min="3" max="24" step="1" value="6">
+<div>Радиус / ширина <span id="imageObjectRadiusValue" class="val">46</span></div>
+<input id="imageObjectRadius" type="range" min="20" max="90" step="1" value="46">
+<div>Высота <span id="imageObjectHeightValue" class="val">92</span></div>
+<input id="imageObjectHeight" type="range" min="30" max="160" step="1" value="92">
+<div>Глубина Box <span id="imageObjectDepthValue" class="val">36</span></div>
+<input id="imageObjectDepth" type="range" min="12" max="90" step="1" value="36">
+<label><input id="imageObjectRepeatFaces" type="checkbox">Повторять текущее фото на всех гранях</label>
 <div>Скорость вращения <span id="cubeSpinSpeedValue" class="val">0.30</span></div>
 <input id="cubeSpinSpeed" type="range" min="0" max="3" step="0.05" value="0.30">
 <div>Поворот при смене <span id="cubeTurnDurationValue" class="val">2.2</span>с</div>
