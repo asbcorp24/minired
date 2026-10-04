@@ -169,7 +169,7 @@ function buildImageObjectGeometry(cfg=defaultImageObject(),preserveTexture=null)
 let cubeFaceIndex=0,cubeStep=0,cubeTransition=null,currentContentType=null,lastCubeTurn=1,imageAdvancePreparing=false,typeTransition=null;
 const preloadCache=new Map();
 let activeImageAverage=new THREE.Color(0x00ffff);
-let cameraDollyBase=null;
+let cameraDollyBase=null,imageChoreoBase=null,imageChoreoItem=null;
 const cubeTargetQ=new THREE.Quaternion(),cubeStartQ=new THREE.Quaternion(),cubeFacingQ=new THREE.Quaternion(),cubeSwayQ=new THREE.Quaternion();
 function imageSideFaces(){return Array.from({length:imageObjectSides},(_,i)=>i);}
 function faceQuaternionForStep(step){
@@ -607,7 +607,7 @@ function updateTransitionFX(p,e){
  }
  transitionFX.geometry.attributes.position.needsUpdate=true;
 }
-function hideImageCube(){imageCubeGroup.visible=false;cubeTransition=null;imageAdvancePreparing=false;imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);}
+function hideImageCube(){imageCubeGroup.visible=false;cubeTransition=null;imageAdvancePreparing=false;imageChoreoBase=null;controls.enabled=true;imageCubeGroup.position.set(0,0,0);imageCubeGroup.rotation.set(0,0,0);}
 function showSTLItem(file){currentContentType='stl';loadSTL(file,{silent:true,fromCube:imageCubeGroup.visible});}
 function cubeNearPosition(){
  const dir=new THREE.Vector3().subVectors(camera.position,controls.target).normalize();
@@ -1005,6 +1005,48 @@ function applyObjectCameraChoreo(t){
  const item=currentPlaylistItem();if(!item||typeTransition||cubeTransition||currentContentType==='transition'||fly)return;
  const c=ensureObjectCamera(item),sp=+c.speed||1,r=+c.radius||120,h=+c.height||35,ty=+c.targetY||0,st=+c.strength||1,q=t*sp;
  controls.enabled=false;
+
+ // Photo objects already calculate their approach/position relative to the camera.
+ // Use only small offsets around a captured base camera instead of absolute world coordinates.
+ if(item.type==='image'&&imageCubeGroup.visible){
+  if(!imageChoreoBase){
+   imageChoreoBase={position:camera.position.clone(),target:controls.target.clone()};
+  }
+  const bp=imageChoreoBase.position,bt=imageChoreoBase.target;
+  const viewDir=new THREE.Vector3().subVectors(bt,bp).normalize();
+  const right=new THREE.Vector3().crossVectors(viewDir,camera.up).normalize();
+  const up=camera.up.clone().normalize();
+  let offRight=0,offUp=0,offForward=0;
+  const amp=Math.min(18,Math.max(3,r*.09))*st;
+
+  if(c.mode==='orbit-slow'){
+   offRight=Math.sin(q*.26)*amp;offUp=Math.cos(q*.22)*amp*.28;offForward=(1-Math.cos(q*.26))*2.2;
+  }else if(c.mode==='hero-push-in'){
+   offRight=Math.sin(q*.14)*amp*.28;offForward=Math.sin(q*.30)*Math.min(12,amp*.75);
+  }else if(c.mode==='side-sweep'){
+   offRight=Math.sin(q*.38)*Math.min(16,amp);offUp=Math.cos(q*.21)*2.2;
+  }else if(c.mode==='low-angle-rise'){
+   offRight=Math.sin(q*.20)*amp*.30;offUp=-5+Math.sin(q*.27)*5.5;offForward=Math.sin(q*.18)*3;
+  }else if(c.mode==='top-down-reveal'){
+   offRight=Math.sin(q*.18)*4;offUp=8+Math.sin(q*.23)*4;offForward=-2;
+  }else if(c.mode==='tunnel-fly'){
+   offRight=Math.sin(q*.45)*4;offUp=Math.cos(q*.37)*2;offForward=Math.sin(q*.28)*5;
+  }
+
+  camera.position.copy(bp).addScaledVector(right,offRight).addScaledVector(up,offUp).addScaledVector(viewDir,offForward);
+  controls.target.copy(imageCubeGroup.position);
+  controls.target.y+=ty*.10;
+  camera.lookAt(controls.target);
+  camera.updateMatrixWorld();
+  // Keep the outer photo carrier aimed at the new camera. The inner object quaternion
+  // still controls which photo face is active.
+  imageCubeGroup.lookAt(camera.position);
+  cubeFacingQ.copy(imageCubeGroup.quaternion);
+  controls.update();
+  return;
+ }
+
+ imageChoreoBase=null;
  if(c.mode==='orbit-slow'){camera.position.set(Math.cos(q*.25)*r,h,Math.sin(q*.25)*r);controls.target.set(0,ty,0);}
  else if(c.mode==='hero-push-in'){camera.position.set(Math.sin(q*.16)*18*st,h,r-Math.sin(q*.32)*28*st);controls.target.set(0,ty,0);}
  else if(c.mode==='side-sweep'){camera.position.set(Math.sin(q*.42)*r,h,r*.55);controls.target.set(0,ty,0);}
@@ -1079,6 +1121,7 @@ function startCubeExitToItem(item){
 }
 function showPlaylistItem(item,{skipCubeExit=false}={}){
  if(!item)return;
+ if(imageChoreoItem!==item){imageChoreoBase=null;imageChoreoItem=item;}
  ensureAppearance(item);applyAppearance(item.appearance);ensureObjectCamera(item);loadObjectCameraUI(item);
  if(!skipCubeExit&&item.type!=='image'&&item.type!=='stl'&&imageCubeGroup.visible){startCubeExitToItem(item);return;}
  if(item.type==='corridor'){showCorridorItem(item);return;}
@@ -1238,7 +1281,7 @@ async function runAutoDirector(){
     const shapes=['cube','box','prism','cylinder'],shape=shapes[i%shapes.length];
     item.imageObject={...defaultImageObject(),...(item.imageObject||{}),type:shape,sides:shape==='cylinder'?16:shape==='prism'?6:4};
    }
-   const camModes=item.type==='stl'?['orbit-slow','hero-push-in','low-angle-rise']:item.type==='image'?['side-sweep','hero-push-in','static-cinematic']:item.type==='corridor'?['tunnel-fly']:['top-down-reveal','static-cinematic'];
+   const camModes=item.type==='stl'?['orbit-slow','hero-push-in','low-angle-rise']:item.type==='image'?['hero-push-in','side-sweep','orbit-slow','static-cinematic']:item.type==='corridor'?['tunnel-fly']:['top-down-reveal','static-cinematic'];
    item.objectCamera={...defaultObjectCamera(),mode:camModes[i%camModes.length],speed:.7+energy*.008,radius:item.type==='corridor'?70:105+energy*.35,height:item.type==='text'?55:32,strength:.7+energy*.01};
    if(item.type==='stl')item.transition=style.stl[i%style.stl.length];
    else if(item.type==='image')item.transition=style.image[i%style.image.length];
@@ -1628,7 +1671,7 @@ function animate(){
    tex.offset.x=Math.sin(t*.35)*.006*state.cubeSway;
    tex.offset.y=Math.cos(t*.31)*.004*state.cubeSway;
   }
-  if(state.cameraDolly&&!typeTransition&&!cubeTransition){
+  if(state.cameraDolly&&!typeTransition&&!cubeTransition&&currentPlaylistItem()?.objectCamera?.mode==='static-cinematic'){
    if(!cameraDollyBase)cameraDollyBase=camera.position.clone();
    const dir=new THREE.Vector3().subVectors(controls.target,camera.position).normalize();
    const target=cameraDollyBase.clone().addScaledVector(dir,4);
