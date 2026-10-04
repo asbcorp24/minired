@@ -340,7 +340,7 @@ async function addTextObject(params=textParamsFromUI(),addToPlaylist=true){
  scene.add(obj.group);textObjects.push(obj);activeTextId=obj.id;
  await rebuildTextObject(obj,true);
  if(addToPlaylist){
-  playlist.push({name:'✦ '+obj.params.text,type:'text',textId:obj.id,duration:defaultTextDuration(obj),transition:obj.params.animation});
+  playlist.push({name:'✦ '+obj.params.text,type:'text',textId:obj.id,duration:defaultTextDuration(obj),transition:obj.params.animation,appearance:captureAppearance()});
   playlistIndex=playlist.length-1;playlistTimer=0;renderPlaylist();
   showPlaylistItem(playlist[playlistIndex]);
  }
@@ -846,8 +846,37 @@ function updateCorridor(dt,t){
   controls.target.set(Math.sin(corridorPhase*.55)*p.bend*.28,Math.cos(corridorPhase*.42)*p.bend*.16,-120);controls.update();
  }
 }
+const appearanceIds=['wireframeToggle','bloomToggle','dofToggle','gridToggle','showFloor','doubleSided','bloomStrength','colorPicker','bgColorPicker'];
+function captureAppearance(){
+ const o={};appearanceIds.forEach(id=>{const e=$(id);if(e)o[id]=e.type==='checkbox'?e.checked:e.value;});return o;
+}
+function defaultAppearance(){
+ return {wireframeToggle:false,bloomToggle:true,dofToggle:true,gridToggle:true,showFloor:true,doubleSided:true,bloomStrength:'1.5',colorPicker:'#0088ff',bgColorPicker:'#050510'};
+}
+function applyAppearance(o){
+ const a={...defaultAppearance(),...(o||{})};
+ if($('wireframeToggle'))$('wireframeToggle').checked=!!a.wireframeToggle;
+ if($('bloomToggle'))$('bloomToggle').checked=!!a.bloomToggle;
+ if($('dofToggle'))$('dofToggle').checked=!!a.dofToggle;
+ if($('gridToggle'))$('gridToggle').checked=!!a.gridToggle;
+ if($('showFloor'))$('showFloor').checked=!!a.showFloor;
+ if($('doubleSided'))$('doubleSided').checked=!!a.doubleSided;
+ if($('bloomStrength'))$('bloomStrength').value=a.bloomStrength;
+ if($('colorPicker'))$('colorPicker').value=a.colorPicker;
+ if($('bgColorPicker'))$('bgColorPicker').value=a.bgColorPicker;
+ state.wire=!!a.wireframeToggle;state.doubleSide=!!a.doubleSided;
+ bloomPass.enabled=!!a.bloomToggle;bokehPass.enabled=!!a.dofToggle&&!imageCubeGroup.visible;
+ grid.visible=!!a.gridToggle;floor.visible=!!a.showFloor;bloomPass.strength=+a.bloomStrength||1.5;
+ baseUniforms.color.set(a.colorPicker||'#0088ff');scene.background.set(a.bgColorPicker||'#050510');scene.fog.color.set(a.bgColorPicker||'#050510');
+ syncMaterials();
+}
+function currentPlaylistItem(){return playlist[playlistIndex]||null;}
+function ensureAppearance(item){if(item&&!item.appearance)item.appearance=captureAppearance();return item?.appearance||null;}
+function saveAppearanceForCurrent(){const item=currentPlaylistItem();if(!item)return;item.appearance=captureAppearance();}
+function resetCurrentAppearance(){const item=currentPlaylistItem();if(!item)return;item.appearance=defaultAppearance();applyAppearance(item.appearance);saveSoon();}
 function showPlaylistItem(item){
  if(!item)return;
+ ensureAppearance(item);applyAppearance(item.appearance);
  if(item.type==='corridor'){showCorridorItem(item);return;}
  disposeCorridor();
  if(item.type==='text'){
@@ -931,8 +960,8 @@ function renderPlaylist(){
 function addFiles(files){
  for(const f of files){
   const n=f.name.toLowerCase();
-  if(n.endsWith('.stl'))playlist.push({name:f.name,file:f,type:'stl',duration:playlistInterval,transition:state.transitionMode});
-  else if(f.type.startsWith('image/')||/\.(jpg|jpeg|png|webp|gif)$/i.test(n))playlist.push({name:f.name,file:f,type:'image',duration:playlistInterval,transition:state.cubeTransitionStyle});
+  if(n.endsWith('.stl'))playlist.push({name:f.name,file:f,type:'stl',duration:playlistInterval,transition:state.transitionMode,appearance:captureAppearance()});
+  else if(f.type.startsWith('image/')||/\.(jpg|jpeg|png|webp|gif)$/i.test(n))playlist.push({name:f.name,file:f,type:'image',duration:playlistInterval,transition:state.cubeTransitionStyle,appearance:captureAppearance()});
  }
  renderPlaylist();
  if(!currentMesh&&!imageCubeGroup.visible&&playlist.length)showPlaylistItem(playlist[0]);
@@ -1405,8 +1434,8 @@ $('fresnelToggle').onchange=e=>{baseUniforms.enabled=e.target.checked?1:0;syncMa
 $('fresnelPower').oninput=e=>{baseUniforms.power=+e.target.value;setText('fresnelPowerValue',(+e.target.value).toFixed(1));syncMaterials();saveSoon();};
 $('fresnelIntensity').oninput=e=>{baseUniforms.intensity=+e.target.value;setText('fresnelIntensityValue',(+e.target.value).toFixed(1));syncMaterials();saveSoon();};
 $('fresnelColorPicker').oninput=e=>{baseUniforms.fresnel.set(e.target.value);syncMaterials();saveSoon();};
-$('colorPicker').oninput=e=>{baseUniforms.color.set(e.target.value);syncMaterials();saveSoon();};
-$('bgColorPicker').oninput=e=>{scene.background.set(e.target.value);scene.fog.color.set(e.target.value);saveSoon();};
+$('colorPicker').oninput=e=>{baseUniforms.color.set(e.target.value);syncMaterials();saveAppearanceForCurrent();saveSoon();};
+$('bgColorPicker').oninput=e=>{scene.background.set(e.target.value);scene.fog.color.set(e.target.value);saveAppearanceForCurrent();saveSoon();};
 $('autoRotateToggle').onchange=e=>{state.autoRotate=e.target.checked;saveSoon();};
 document.querySelectorAll('.axis').forEach(b=>b.onclick=()=>{document.querySelectorAll('.axis').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.axis=b.dataset.axis;saveSoon();});
 $('speedSlider').oninput=e=>{state.speed=+e.target.value;setText('speedValue',Math.abs(state.speed).toFixed(1));$('directionLabel').textContent=state.speed<0?'↺':state.speed>0?'↻':'⏸';saveSoon();};
@@ -1438,7 +1467,7 @@ $('pauseRotBtn').onclick=()=>{state.rotPaused=!state.rotPaused;$('pauseRotBtn').
 document.querySelectorAll('.orient').forEach(b=>b.onclick=()=>{if(currentMesh){currentMesh.rotation[b.dataset.axis]+=THREE.MathUtils.degToRad(+b.dataset.deg);if(state.technicalMode)updateTechnicalOverlay(currentMesh);}});
 $('orientationResetBtn').onclick=()=>{if(currentMesh)currentMesh.rotation.set(0,0,0);};
 
-$('addCorridorBtn').onclick=()=>{const item={name:'🌀 Музыкальный коридор',type:'corridor',duration:12,transition:'flow'};playlist.push(item);playlistIndex=playlist.length-1;playlistTimer=0;renderPlaylist();showPlaylistItem(item);};
+$('addCorridorBtn').onclick=()=>{const item={name:'🌀 Музыкальный коридор',type:'corridor',duration:12,transition:'flow',appearance:captureAppearance()};playlist.push(item);playlistIndex=playlist.length-1;playlistTimer=0;renderPlaylist();showPlaylistItem(item);};
 function rebuildCorridorFromUI(){syncCorridorState();if(corridorActive)buildCorridor(true);saveSoon();}
 $('corridorAudioReact').onchange=e=>{state.corridorAudioReact=e.target.checked;saveSoon();};
 $('corridorLength').oninput=e=>{state.corridorLength=+e.target.value;setText('corridorLengthValue',Math.round(state.corridorLength));rebuildCorridorFromUI();};
@@ -1532,11 +1561,14 @@ $('applyScenePreset').onclick=()=>applyScenePresetByName($('scenePreset').value)
 const onScenePreset=e=>{state.scenePreset=e.target.value;};$('scenePreset').onchange=onScenePreset;$('scenePreset').oninput=onScenePreset;
 $('saveCustomPreset').onclick=()=>{customScenePreset={bg:'#'+scene.background.getHexString(),fog:'#'+scene.fog.color.getHexString(),bloom:bloomPass.strength,model:'#'+baseUniforms.color.getHexString(),edge:$('cubeEdgeColor').value,env:$('envColorPicker').value,floor:floor.visible,grid:grid.visible,particles:particleGroup.visible,rings:ringGroup.visible,grade:state.gradePreset,glass:$('cubeGlassColor').value,glassOpacity:state.cubeGlassOpacity};state.scenePreset='custom';$('scenePreset').value='custom';saveSoon();$('info').textContent='💾 Custom scene preset сохранён';};
 
-$('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();saveSoon();};
-$('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveSoon();};
-$('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked&&!imageCubeGroup.visible;saveSoon();};
-$('gridToggle').onchange=e=>{grid.visible=e.target.checked;saveSoon();};$('showFloor').onchange=e=>{floor.visible=e.target.checked;saveSoon();};
-$('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveSoon();};const setTransitionMode=e=>{state.transitionMode=e.target.value;saveSoon();};$('transitionMode').onchange=setTransitionMode;$('transitionMode').oninput=setTransitionMode;$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
+$('appearanceCopyAll').onclick=()=>{const a=captureAppearance();playlist.forEach(item=>item.appearance={...a});$('info').textContent='🎨 Внешний вид применён ко всем элементам';saveSoon();};
+$('appearanceResetCurrent').onclick=resetCurrentAppearance;
+
+$('wireframeToggle').onchange=e=>{state.wire=e.target.checked;syncMaterials();saveAppearanceForCurrent();saveSoon();};
+$('doubleSided').onchange=e=>{state.doubleSide=e.target.checked;syncMaterials();saveAppearanceForCurrent();saveSoon();};
+$('bloomToggle').onchange=e=>{bloomPass.enabled=e.target.checked;saveAppearanceForCurrent();saveSoon();};$('dofToggle').onchange=e=>{bokehPass.enabled=e.target.checked&&!imageCubeGroup.visible;saveAppearanceForCurrent();saveSoon();};
+$('gridToggle').onchange=e=>{grid.visible=e.target.checked;saveAppearanceForCurrent();saveSoon();};$('showFloor').onchange=e=>{floor.visible=e.target.checked;saveAppearanceForCurrent();saveSoon();};
+$('bloomStrength').oninput=e=>{bloomPass.strength=+e.target.value;saveAppearanceForCurrent();saveSoon();};const setTransitionMode=e=>{state.transitionMode=e.target.value;saveSoon();};$('transitionMode').onchange=setTransitionMode;$('transitionMode').oninput=setTransitionMode;$('transitionDuration').oninput=e=>{state.transition=+e.target.value;setText('transitionDurationValue',state.transition.toFixed(1));saveSoon();};
 
 $('envToggle').onchange=e=>{state.env=e.target.checked;envGroup.visible=state.env;saveSoon();};
 $('particlesToggle').onchange=e=>{state.particles=e.target.checked;particleGroup.visible=state.particles;saveSoon();};
@@ -1570,7 +1602,7 @@ window.addEventListener('drop',e=>{e.preventDefault();drag.classList.remove('act
 $('previewBtn').onclick=()=>{document.body.classList.toggle('preview-mode');};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.classList.remove('preview-mode');});
 $('saveProjectBtn').onclick=()=>{
- const payload={version:4,state:{...state},customScenePreset,settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
+ const payload={version:5,state:{...state},customScenePreset,settings:saveSettingsSnapshot(),playlist:playlist.map(x=>({name:x.name,type:x.type,duration:x.duration,transition:x.transition,appearance:x.appearance?{...x.appearance}:undefined,textIndex:x.type==='text'?textObjects.findIndex(o=>o.id===x.textId):undefined})),texts:textObjects.map(o=>({...o.params}))};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=u;a.download='minired-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
@@ -1583,8 +1615,8 @@ $('projectInput').onchange=async e=>{
   if(p.settings)applySettingsSnapshot(p.settings);
   [...textObjects].forEach(disposeTextObject);
   const restoredTexts=[];for(const tp of (p.texts||[]))restoredTexts.push(await addTextObject(tp,false));
-  const restoredTextItems=(p.playlist||[]).filter(x=>x.type==='text'&&x.textIndex!=null&&restoredTexts[x.textIndex]).map(x=>({...x,textId:restoredTexts[x.textIndex].id}));
-  const restoredCorridors=(p.playlist||[]).filter(x=>x.type==='corridor').map(x=>({...x}));
+  const restoredTextItems=(p.playlist||[]).filter(x=>x.type==='text'&&x.textIndex!=null&&restoredTexts[x.textIndex]).map(x=>({...x,textId:restoredTexts[x.textIndex].id,appearance:x.appearance||defaultAppearance()}));
+  const restoredCorridors=(p.playlist||[]).filter(x=>x.type==='corridor').map(x=>({...x,appearance:x.appearance||defaultAppearance()}));
   playlist.push(...restoredTextItems,...restoredCorridors);renderPlaylist();
   alert('Настройки и 3D-текст проекта загружены. Текст восстановлен в плейлисте; медиа-файлы нужно добавить заново.');
  }catch(err){console.error(err);alert('Ошибка проекта');}
