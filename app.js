@@ -874,9 +874,23 @@ function currentPlaylistItem(){return playlist[playlistIndex]||null;}
 function ensureAppearance(item){if(item&&!item.appearance)item.appearance=captureAppearance();return item?.appearance||null;}
 function saveAppearanceForCurrent(){const item=currentPlaylistItem();if(!item)return;item.appearance=captureAppearance();}
 function resetCurrentAppearance(){const item=currentPlaylistItem();if(!item)return;item.appearance=defaultAppearance();applyAppearance(item.appearance);saveSoon();}
-function showPlaylistItem(item){
+function startCubeExitToItem(item){
+ if(!item||!imageCubeGroup.visible)return false;
+ cubeTransition=null;imageAdvancePreparing=false;
+ typeTransition={
+  kind:'cube-to-other',time:0,duration:Math.max(1.0,state.transition*1.15),
+  cubeFrom:imageCubeGroup.position.clone(),
+  cubeTo:sceneBackPosition(Math.max(360,state.cubeFarDistance*1.35)),
+  cubeScaleFrom:imageCubeGroup.scale.clone(),
+  targetItem:item
+ };
+ currentContentType='transition';
+ return true;
+}
+function showPlaylistItem(item,{skipCubeExit=false}={}){
  if(!item)return;
  ensureAppearance(item);applyAppearance(item.appearance);
+ if(!skipCubeExit&&item.type!=='image'&&item.type!=='stl'&&imageCubeGroup.visible){startCubeExitToItem(item);return;}
  if(item.type==='corridor'){showCorridorItem(item);return;}
  disposeCorridor();
  if(item.type==='text'){
@@ -914,7 +928,7 @@ function loadSTL(file,{silent=false,fromCube=false}={}){
      stlTo:new THREE.Vector3(0,0,0),
      stlTargetScale:new THREE.Vector3(state.objectScale,state.objectScale,state.objectScale),
      cubeFrom:imageCubeGroup.position.clone(),
-     cubeTo:sceneBackPosition(300),
+     cubeTo:sceneBackPosition(Math.max(360,state.cubeFarDistance*1.35)),
      fileName:file.name
     };
     currentContentType='transition';
@@ -1229,9 +1243,23 @@ function animate(){
  if(typeTransition){
   typeTransition.time+=dt;
   const p=Math.min(typeTransition.time/Math.max(.05,typeTransition.duration),1),e=ease(p);
-  if(typeTransition.kind==='cube-to-stl'){
+  if(typeTransition.kind==='cube-to-other'){
+   const outP=Math.min(1,p/.9),fadeP=Math.min(1,p/.72);
+   imageCubeGroup.position.lerpVectors(typeTransition.cubeFrom,typeTransition.cubeTo,ease(outP));
+   const shrink=1-.28*ease(outP);
+   imageCubeGroup.scale.copy(typeTransition.cubeScaleFrom).multiplyScalar(shrink);
+   setCubeVisualAlpha(1-ease(fadeP));
+   imageCube.rotation.y+=dt*.28;
+   if(p>=1){
+    const target=typeTransition.targetItem;
+    hideImageCube();setCubeVisualAlpha(1);imageCubeGroup.scale.setScalar(state.objectScale);imageCubeGroup.scale.setScalar(state.objectScale);
+    typeTransition=null;currentContentType=null;
+    showPlaylistItem(target,{skipCubeExit:true});
+   }
+  }else if(typeTransition.kind==='cube-to-stl'){
    const outP=Math.min(1,p/.48),inP=p<.32?0:Math.min(1,(p-.32)/.68),style=state.typeTransitionStyle;
    imageCubeGroup.position.lerpVectors(typeTransition.cubeFrom,typeTransition.cubeTo,ease(outP));
+   imageCubeGroup.scale.setScalar(state.objectScale*(1-.24*ease(outP)));
    setCubeVisualAlpha(style==='dissolve'?1-ease(Math.min(1,p/.72)):style==='holo'?Math.max(0,1-ease(outP))*(.55+.45*Math.abs(Math.cos(p*Math.PI*8))):1-ease(outP));
    const m=typeTransition.stl;
    m.position.lerpVectors(typeTransition.stlFrom,typeTransition.stlTo,ease(inP));
