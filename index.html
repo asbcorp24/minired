@@ -197,6 +197,24 @@ body.preview-mode #ui,body.preview-mode #controls,body.preview-mode #playlist,bo
 <div>Сегменты <span id="corridorSegmentsValue" class="val">96</span></div>
 <input id="corridorSegments" type="range" min="32" max="220" step="4" value="96">
 <div>Цвет</div><input id="corridorColor" type="color" value="#00ffff">
+<div>Форма сечения</div>
+<select id="corridorShape">
+<option value="circle" selected>Круг</option>
+<option value="square">Квадрат</option>
+<option value="hex">Шестигранник</option>
+<option value="oct">Восьмиугольник</option>
+<option value="star">Звезда</option>
+<option value="diamond">Ромб</option>
+<option value="rounded-square">Скруглённый квадрат</option>
+</select>
+<div>Плотность колец <span id="corridorDensityValue" class="val">1.00</span>x</div>
+<input id="corridorDensity" type="range" min=".4" max="2" step=".05" value="1">
+<div>Толщина линий <span id="corridorLineWidthValue" class="val">1.0</span></div>
+<input id="corridorLineWidth" type="range" min=".5" max="4" step=".1" value="1">
+<div>Волна формы <span id="corridorShapeWaveValue" class="val">0.18</span></div>
+<input id="corridorShapeWave" type="range" min="0" max=".8" step=".02" value=".18">
+<div>Вращение сечения <span id="corridorSectionSpinValue" class="val">0.45</span></div>
+<input id="corridorSectionSpin" type="range" min="-3" max="3" step=".05" value=".45">
 <div>Стиль</div>
 <select id="corridorStyle">
 <option value="wire">Wireframe</option>
