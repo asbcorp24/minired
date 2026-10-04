@@ -1195,10 +1195,41 @@ function renderPlaylist(){
   const meta=document.createElement('span');meta.className='pl-meta';meta.textContent=(x.duration||playlistInterval)+'с';meta.title='Клик — изменить длительность';d.insertBefore(meta,d.querySelector('.remove'));
   meta.onclick=e=>{e.stopPropagation();const v=+prompt('Длительность элемента, секунд',x.duration||playlistInterval);if(Number.isFinite(v)&&v>=1){x.duration=Math.min(600,v);renderPlaylist();}};
   d.oncontextmenu=e=>{e.preventDefault();const modes=x.type==='image'?['fly-turn','dissolve','particles','holo']:x.type==='text'?['fade','scale','rise','type-on','letter-burst']:x.type==='corridor'?['flow','pulse','neon']:['crossfade','particles','wire-scan','assemble'];const pos=Math.max(0,modes.indexOf(x.transition));x.transition=modes[(pos+1)%modes.length];if(x.type==='text'){const o=textObjects.find(o=>o.id===x.textId);if(o){o.params.animation=x.transition;if(o.id===activeTextId){$('textAnimation').value=x.transition;}rebuildTextObject(o,false);}}$('info').textContent='Переход: '+x.transition;};
-  d.ondragstart=()=>{d.classList.add('dragging');window.__plDrag=i;};
-  d.ondragend=()=>d.classList.remove('dragging');
-  d.ondragover=e=>e.preventDefault();
-  d.ondrop=e=>{e.preventDefault();const from=window.__plDrag;if(from==null||from===i)return;const [m]=playlist.splice(from,1);playlist.splice(i,0,m);playlistIndex=playlist.indexOf(m);renderPlaylist();};
+  d.ondragstart=e=>{
+   d.classList.add('dragging');window.__plDrag=i;window.__plDropAfter=false;
+   try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(i));}catch(_){}
+  };
+  d.ondragend=()=>{
+   d.classList.remove('dragging');window.__plDrag=null;window.__plDropAfter=false;
+   document.querySelectorAll('.pl-item.drop-before,.pl-item.drop-after').forEach(el=>el.classList.remove('drop-before','drop-after'));
+  };
+  d.ondragover=e=>{
+   e.preventDefault();if(window.__plDrag==null)return;
+   try{e.dataTransfer.dropEffect='move';}catch(_){}
+   const rect=d.getBoundingClientRect(),after=e.clientY>rect.top+rect.height/2;
+   window.__plDropAfter=after;
+   document.querySelectorAll('.pl-item.drop-before,.pl-item.drop-after').forEach(el=>{if(el!==d)el.classList.remove('drop-before','drop-after');});
+   d.classList.toggle('drop-before',!after);d.classList.toggle('drop-after',after);
+  };
+  d.ondragleave=e=>{
+   if(!d.contains(e.relatedTarget))d.classList.remove('drop-before','drop-after');
+  };
+  d.ondrop=e=>{
+   e.preventDefault();e.stopPropagation();
+   const from=window.__plDrag,target=i,after=!!window.__plDropAfter;
+   d.classList.remove('drop-before','drop-after');
+   if(from==null||from===target){window.__plDrag=null;return;}
+   const activeItem=playlist[playlistIndex];
+   let insertAt=target+(after?1:0);
+   const [moved]=playlist.splice(from,1);
+   if(from<insertAt)insertAt--;
+   insertAt=Math.max(0,Math.min(insertAt,playlist.length));
+   playlist.splice(insertAt,0,moved);
+   playlistIndex=Math.max(0,playlist.indexOf(activeItem));
+   window.__plDrag=null;window.__plDropAfter=false;
+   renderPlaylist();saveSoon();
+   $('info').textContent='↕ Порядок плейлиста изменён';
+  };
   d.onclick=e=>{if(e.target.classList.contains('remove'))return;playlistIndex=i;playlistTimer=0;renderPlaylist();showPlaylistItem(x);};
   d.querySelector('.remove').onclick=e=>{e.stopPropagation();const removed=playlist[i];if(removed?.type==='corridor'&&currentContentType==='corridor')disposeCorridor();if(removed?.type==='text'){const o=textObjects.find(o=>o.id===removed.textId);if(o){scene.remove(o.group);o.mesh?.geometry?.dispose();o.mesh?.material?.dispose();o.glowMesh?.geometry?.dispose();o.glowMesh?.material?.dispose();o.letters?.forEach(l=>{l.mesh?.geometry?.dispose();l.mesh?.material?.dispose();l.glow?.geometry?.dispose();l.glow?.material?.dispose();});const ti=textObjects.indexOf(o);if(ti>=0)textObjects.splice(ti,1);}}playlist.splice(i,1);if(playlistIndex>=playlist.length)playlistIndex=Math.max(0,playlist.length-1);refreshTextSelect();renderPlaylist();if(playlist.length)showPlaylistItem(playlist[playlistIndex]);else clearModels();};
   $('plList').appendChild(d);
